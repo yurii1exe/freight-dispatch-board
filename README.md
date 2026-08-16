@@ -1,5 +1,7 @@
 # Freight Dispatch Board
 
+[![CI](https://github.com/yurii1exe/freight-dispatch-board/actions/workflows/ci.yml/badge.svg)](https://github.com/yurii1exe/freight-dispatch-board/actions/workflows/ci.yml)
+
 **Load tender in, dispatch board, status updates out.** An EDI 204 arrives, becomes a row a
 dispatcher can work, and every status change on that row generates the 214 that reports it
 back to the tendering party.
@@ -12,6 +14,9 @@ A 204 pasted in, the load landing on the board, and six status changes walking i
 four-stop run — with the generated 214 alongside at every step:
 
 ![204 in, board, 214 out](docs/board-demo.gif)
+
+And the board itself — twelve loads, one of them open, showing its stops, the 214s already
+sent against it and the generated file underneath:
 
 ![The board](docs/board.png)
 
