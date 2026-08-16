@@ -118,9 +118,14 @@ td.bar {
   font-family: var(--mono);
 }
 
-.multi {
+/* The stop counter is the only place on a row that says where the truck is in a
+   multi-stop run, so it is the only number on the row that gets the accent colour. */
+.progress {
   color: var(--accent);
   font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(88, 166, 255, 0.1);
 }
 
 .c {

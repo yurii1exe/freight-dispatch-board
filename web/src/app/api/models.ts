@@ -26,6 +26,15 @@ export interface LoadSummary {
   totalWeight: number | null;
   stopCount: number;
   extraStops: number;
+  isMultiStop: boolean;
+  currentStopSequence: number;
+  currentStopOrdinal: number;
+  currentStopName: string;
+  currentStopCityState: string;
+  currentStopReason: string;
+  currentStopIsPickup: boolean;
+  stopProgress: string;
+  nextActionLabel: string;
   originName: string;
   originCityState: string;
   originEarliest: string | null;
@@ -69,6 +78,8 @@ export interface StopDto {
   reasonCode: string;
   reasonName: string;
   isPickup: boolean;
+  isCurrent: boolean;
+  isComplete: boolean;
   location: PartyDto;
   earliest: string | null;
   latest: string | null;
@@ -88,6 +99,9 @@ export interface StatusEventDto {
   status: StatusKey;
   statusLabel: string;
   statusOrder: number;
+  stopSequence: number;
+  stopOrdinal: number;
+  stopName: string;
   statusCode: string;
   statusCodeName: string;
   reasonCode: string;

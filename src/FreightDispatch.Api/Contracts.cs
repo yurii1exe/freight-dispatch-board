@@ -20,6 +20,15 @@ public sealed record LoadSummary(
     decimal? TotalWeight,
     int StopCount,
     int ExtraStops,
+    bool IsMultiStop,
+    int CurrentStopSequence,
+    int CurrentStopOrdinal,
+    string CurrentStopName,
+    string CurrentStopCityState,
+    string CurrentStopReason,
+    bool CurrentStopIsPickup,
+    string StopProgress,
+    string NextActionLabel,
     string OriginName,
     string OriginCityState,
     DateTime? OriginEarliest,
@@ -57,6 +66,8 @@ public sealed record StopDto(
     string ReasonCode,
     string ReasonName,
     bool IsPickup,
+    bool IsCurrent,
+    bool IsComplete,
     PartyDto Location,
     DateTime? Earliest,
     DateTime? Latest,
@@ -95,6 +106,9 @@ public sealed record StatusEventDto(
     string Status,
     string StatusLabel,
     int StatusOrder,
+    int StopSequence,
+    int StopOrdinal,
+    string StopName,
     string StatusCode,
     string StatusCodeName,
     string ReasonCode,
@@ -143,7 +157,9 @@ public static class Contracts
     /// <param name="load">The load.</param>
     public static LoadSummary ToSummary(Load load)
     {
-        LoadStatus? next = StatusCatalog.Next(load.Status);
+        bool stopsRemain = load.StopsRemainAfterCurrent;
+        LoadStatus? next = StatusCatalog.Next(load.Status, stopsRemain);
+        Stop? current = load.CurrentStop;
 
         return new LoadSummary(
             load.Id,
@@ -162,6 +178,15 @@ public static class Contracts
             load.TotalWeight,
             load.Stops.Count,
             load.ExtraStops,
+            load.IsMultiStop,
+            load.CurrentStopSequence,
+            load.CurrentStopOrdinal,
+            current?.Location.Name ?? string.Empty,
+            current?.Location.CityState ?? string.Empty,
+            current?.ReasonName ?? string.Empty,
+            current?.IsPickup ?? false,
+            load.IsMultiStop ? $"{load.CurrentStopOrdinal}/{load.Stops.Count}" : string.Empty,
+            NextAction(load, next, stopsRemain),
             load.Origin?.Location.Name ?? string.Empty,
             load.Origin?.Location.CityState ?? string.Empty,
             load.Origin?.Window.Earliest,
@@ -190,18 +215,24 @@ public static class Contracts
         load.BillTo is null ? null : ToParty(load.BillTo),
         load.References.Select(ToReference).ToList(),
         load.Notes,
-        load.Stops.Select(ToStop).ToList(),
+        load.Stops.Select(stop => ToStop(stop, load)).ToList(),
         load.Events.Select(ToEvent).ToList(),
         load.TenderDiagnostics,
         load.SourceEdi);
 
-    /// <summary>Projects a stop.</summary>
+    /// <summary>
+    /// Projects a stop, marked with where the truck is relative to it.
+    /// </summary>
     /// <param name="stop">The stop.</param>
-    public static StopDto ToStop(Stop stop) => new(
+    /// <param name="load">The load it belongs to, for the current-stop pointer.</param>
+    public static StopDto ToStop(Stop stop, Load load) => new(
         stop.Sequence,
         stop.ReasonCode,
         stop.ReasonName,
         stop.IsPickup,
+        stop.Sequence == load.CurrentStopSequence,
+        stop.Sequence < load.CurrentStopSequence ||
+            (stop.Sequence == load.CurrentStopSequence && load.Status == LoadStatus.Delivered),
         ToParty(stop.Location),
         stop.Window.Earliest,
         stop.Window.Latest,
@@ -242,8 +273,13 @@ public static class Contracts
     public static StatusEventDto ToEvent(StatusEvent statusEvent) => new(
         statusEvent.Id,
         statusEvent.Status.ToString(),
-        StatusCatalog.DescribeStatus(statusEvent.Status),
+        string.IsNullOrEmpty(statusEvent.Label)
+            ? StatusCatalog.DescribeStatus(statusEvent.Status)
+            : statusEvent.Label,
         (int)statusEvent.Status,
+        statusEvent.StopSequence,
+        statusEvent.StopOrdinal,
+        statusEvent.StopName,
         statusEvent.StatusCode,
         statusEvent.StatusCodeName,
         statusEvent.ReasonCode,
@@ -289,6 +325,40 @@ public static class Contracts
         "" => "Unspecified",
         _ => code,
     };
+
+    /// <summary>
+    /// The label on the button that moves the load on.
+    /// </summary>
+    /// <remarks>
+    /// On a two-stop load the board vocabulary is the clearest thing to put on a button.
+    /// On a four-stop load it is not: "In transit" three times in a row tells a dispatcher
+    /// nothing about which drop is being left, so the button names the stop instead.
+    /// </remarks>
+    private static string NextAction(Load load, LoadStatus? next, bool stopsRemain)
+    {
+        if (next is not { } status)
+        {
+            return string.Empty;
+        }
+
+        if (!load.IsMultiStop)
+        {
+            return StatusCatalog.DescribeStatus(status);
+        }
+
+        int ordinal = load.CurrentStopOrdinal;
+        int count = load.Stops.Count;
+
+        return status switch
+        {
+            LoadStatus.AtShipper or LoadStatus.AtConsignee => $"Arrive stop {ordinal} of {count}",
+            LoadStatus.InTransit when stopsRemain && load.Status == LoadStatus.AtConsignee =>
+                $"Finish + depart stop {ordinal}",
+            LoadStatus.InTransit => $"Depart stop {ordinal}",
+            LoadStatus.Delivered => "Deliver — final stop",
+            _ => StatusCatalog.DescribeStatus(status),
+        };
+    }
 
     private static string? FindReference(Load load, string qualifier) =>
         load.References.FirstOrDefault(r => r.Qualifier == qualifier)?.Value;

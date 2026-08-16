@@ -213,6 +213,47 @@
   border-color: #27527e;
 }
 
+/* A finished stop stops competing for attention; the current one wins it outright. */
+.stops li.done .seq {
+  color: #0b1a12;
+  background: var(--good);
+  border-color: var(--good);
+  font-size: 11px;
+}
+
+.stops li.done .stop-body {
+  opacity: 0.55;
+}
+
+.stops li.current .seq {
+  color: #0b0f14;
+  background: var(--st);
+  border-color: var(--st);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st) 22%, transparent);
+}
+
+.stops li.current .stop-body {
+  opacity: 1;
+}
+
+.here {
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0b0f14;
+  background: var(--st);
+  white-space: nowrap;
+}
+
+.here-note {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--st);
+}
+
 .stop-body {
   min-width: 0;
   flex: 1;

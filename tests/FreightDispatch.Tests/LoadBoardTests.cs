@@ -19,7 +19,7 @@ public class LoadBoardTests
 
         foreach (LoadStatus status in StatusCatalog.All.Skip(1))
         {
-            StatusEvent statusEvent = board.Advance(load.Id, status, occurredAt: Clock);
+            StatusEvent statusEvent = board.AdvanceOne(load.Id, status, occurredAt: Clock);
             Assert.Equal(status, statusEvent.Status);
             Assert.True(statusEvent.RoundTripClean, string.Join("; ", statusEvent.RoundTripDiagnostics));
         }
@@ -40,7 +40,7 @@ public class LoadBoardTests
         Load load = board.Tender(Samples.Read(Samples.DryVan)).Single();
 
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(
-            () => board.Advance(load.Id, LoadStatus.Delivered, occurredAt: Clock));
+            () => board.AdvanceOne(load.Id, LoadStatus.Delivered, occurredAt: Clock));
 
         Assert.Contains("Dispatched", error.Message, StringComparison.Ordinal);
         Assert.Equal(LoadStatus.Tendered, load.Status);
@@ -55,12 +55,12 @@ public class LoadBoardTests
 
         foreach (LoadStatus status in StatusCatalog.All.Skip(1))
         {
-            board.Advance(load.Id, status, occurredAt: Clock);
+            board.AdvanceOne(load.Id, status, occurredAt: Clock);
         }
 
         Assert.Null(StatusCatalog.Next(LoadStatus.Delivered));
         Assert.Throws<InvalidOperationException>(
-            () => board.Advance(load.Id, LoadStatus.Delivered, occurredAt: Clock));
+            () => board.AdvanceOne(load.Id, LoadStatus.Delivered, occurredAt: Clock));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class LoadBoardTests
         // and no explanation.
         var board = new LoadBoard(new ControlNumbers(4001), () => Clock);
         Load load = board.Tender(Samples.Read(Samples.DryVan)).Single();
-        string generated = board.Advance(load.Id, LoadStatus.Dispatched, occurredAt: Clock).Edi214;
+        string generated = board.AdvanceOne(load.Id, LoadStatus.Dispatched, occurredAt: Clock).Edi214;
 
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => board.Tender(generated));
 
@@ -97,8 +97,8 @@ public class LoadBoardTests
         var board = new LoadBoard(new ControlNumbers(4001), () => Clock);
         Load load = board.Tender(Samples.Read(Samples.DryVan)).Single();
 
-        StatusEvent first = board.Advance(load.Id, LoadStatus.Dispatched, occurredAt: Clock);
-        StatusEvent second = board.Advance(load.Id, LoadStatus.AtShipper, occurredAt: Clock);
+        StatusEvent first = board.AdvanceOne(load.Id, LoadStatus.Dispatched, occurredAt: Clock);
+        StatusEvent second = board.AdvanceOne(load.Id, LoadStatus.AtShipper, occurredAt: Clock);
 
         Assert.Equal(new[] { first.Id, second.Id }, load.Events.Select(e => e.Id));
         Assert.NotEqual(first.Edi214, second.Edi214);
@@ -111,7 +111,7 @@ public class LoadBoardTests
         var board = new LoadBoard(new ControlNumbers(4001), () => Clock);
         Load load = board.Tender(Samples.Read(Samples.DryVan)).Single();
 
-        StatusEvent statusEvent = board.Advance(
+        StatusEvent statusEvent = board.AdvanceOne(
             load.Id, LoadStatus.Dispatched, occurredAt: Clock, note: "Driver Ray, cell 312 555 0117");
 
         Assert.Equal("Driver Ray, cell 312 555 0117", statusEvent.Note);

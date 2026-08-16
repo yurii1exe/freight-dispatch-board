@@ -9,7 +9,7 @@
       <col style="width: 100px" />
       <col />
       <col style="width: 100px" />
-      <col style="width: 40px" />
+      <col style="width: 56px" />
       <col style="width: 72px" />
       <col style="width: 100px" />
       <col style="width: 44px" />
@@ -83,9 +83,10 @@
           </td>
 
           <td class="c mono">
-            {{ row.load.stopCount }}
-            @if (row.load.extraStops > 0) {
-              <span class="multi" title="More than a straight pickup and drop">+</span>
+            @if (row.load.isMultiStop) {
+              <span class="progress" [title]="row.stopTooltip">{{ row.load.stopProgress }}</span>
+            } @else {
+              {{ row.load.stopCount }}
             }
           </td>
 
@@ -103,9 +104,9 @@
               <button
                 class="tiny"
                 (click)="advanceLoad.emit(row.load); $event.stopPropagation()"
-                [title]="'Send a 214 and move to ' + row.load.nextStatusLabel"
+                [title]="row.actionTooltip"
               >
-                {{ row.load.nextStatusLabel }} →
+                {{ row.load.nextActionLabel }} →
               </button>
             } @else {
               <span class="done">complete</span>

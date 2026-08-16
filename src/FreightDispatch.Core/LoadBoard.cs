@@ -105,10 +105,14 @@ public sealed class LoadBoard
     /// <param name="city">MS101. Defaults to the stop the status implies.</param>
     /// <param name="state">MS102.</param>
     /// <param name="note">A dispatcher note. Stays on the board; not sent.</param>
-    /// <returns>The event, carrying the generated 214.</returns>
+    /// <returns>
+    /// The events generated, in order — usually one. Leaving an intermediate stop produces
+    /// two: the completion of the work there and the departure from it. One click on a
+    /// board, two things a partner needs told.
+    /// </returns>
     /// <exception cref="KeyNotFoundException">No such load.</exception>
-    /// <exception cref="InvalidOperationException">The transition is not one step forward.</exception>
-    public StatusEvent Advance(
+    /// <exception cref="InvalidOperationException">The transition is not the one the board offers.</exception>
+    public IReadOnlyList<StatusEvent> Advance(
         Guid id,
         LoadStatus status,
         DateTime? occurredAt = null,
@@ -121,73 +125,160 @@ public sealed class LoadBoard
 
         lock (load.Events)
         {
-            if (!StatusCatalog.CanTransition(load.Status, status))
+            bool stopsRemain = load.StopsRemainAfterCurrent;
+
+            if (!StatusCatalog.CanTransition(load.Status, status, stopsRemain))
             {
+                LoadStatus? offered = StatusCatalog.Next(load.Status, stopsRemain);
+
                 throw new InvalidOperationException(
                     $"A load in '{StatusCatalog.DescribeStatus(load.Status)}' cannot move to " +
                     $"'{StatusCatalog.DescribeStatus(status)}'. The next step is " +
-                    $"'{(StatusCatalog.Next(load.Status) is { } next ? StatusCatalog.DescribeStatus(next) : "none — the load is delivered")}'.");
+                    $"'{(offered is { } value ? StatusCatalog.DescribeStatus(value) : "none — the load is delivered")}'.");
             }
 
-            Stop? stop = StopFor(load, status);
-            string eventCity = Coalesce(city, stop?.Location.City);
-            string eventState = Coalesce(state, stop?.Location.State);
-            string eventCountry = Coalesce(null, stop?.Location.Country, "US");
-
+            // Every event in this transition happens at the stop the truck is working now.
+            // That is the whole point of the pointer: a 214 sent from stop two of four has
+            // to say stop two, not the final drop.
+            Stop? stop = load.CurrentStop;
+            bool atPickup = stop?.IsPickup ?? false;
             DateTime happenedAt = occurredAt ?? _clock();
-            string statusCode = StatusCatalog.StatusCodeFor(status);
 
-            Edi214Result result = _writer.Write(
+            var emitted = new List<StatusEvent>();
+
+            // Leaving a stop the truck had arrived at means the work there finished, and
+            // that is a separate status code from the departure. A partner tracking a
+            // multi-drop load needs the D1 as much as the CD — the D1 is the proof of
+            // delivery for that stop's freight.
+            bool leavingAStopMidRoute =
+                status == LoadStatus.InTransit && load.Status == LoadStatus.AtConsignee;
+
+            if (leavingAStopMidRoute)
+            {
+                emitted.Add(Emit(
+                    load,
+                    load.Status,
+                    stop,
+                    StatusCatalog.CompletionCode(atPickup),
+                    CompletionLabel(load, atPickup),
+                    reasonCode,
+                    happenedAt,
+                    city,
+                    state,
+                    note: string.Empty));
+            }
+
+            emitted.Add(Emit(
                 load,
-                statusCode,
+                status,
+                stop,
+                StatusCatalog.StatusCodeFor(status, atPickup),
+                EventLabel(load, status),
                 reasonCode,
                 happenedAt,
-                eventCity,
-                eventState,
-                eventCountry,
-                _clock());
+                city,
+                state,
+                note ?? string.Empty));
 
-            var statusEvent = new StatusEvent
-            {
-                Status = status,
-                StatusCode = statusCode,
-                ReasonCode = reasonCode,
-                OccurredAt = happenedAt,
-                City = eventCity,
-                State = eventState,
-                Country = eventCountry,
-                Note = note ?? string.Empty,
-                Edi214 = result.Edi,
-                InterchangeControlNumber = result.InterchangeControlNumber,
-                TransactionControlNumber = result.TransactionControlNumber,
-                RoundTripDiagnostics = result.Diagnostics,
-            };
-
-            load.Events.Add(statusEvent);
             load.Status = status;
 
-            return statusEvent;
+            // The pointer moves on departure, because that is the moment the truck stops
+            // being at one place and starts running to the next.
+            if (status == LoadStatus.InTransit && load.NextStop is { } next)
+            {
+                load.CurrentStopSequence = next.Sequence;
+            }
+
+            return emitted;
         }
     }
 
+    /// <summary>Writes one 214 and records the event it reports.</summary>
+    private StatusEvent Emit(
+        Load load,
+        LoadStatus status,
+        Stop? stop,
+        string statusCode,
+        string label,
+        string reasonCode,
+        DateTime happenedAt,
+        string? city,
+        string? state,
+        string note)
+    {
+        string eventCity = Coalesce(city, stop?.Location.City);
+        string eventState = Coalesce(state, stop?.Location.State);
+        string eventCountry = Coalesce(null, stop?.Location.Country, "US");
+
+        Edi214Result result = _writer.Write(
+            load,
+            statusCode,
+            reasonCode,
+            happenedAt,
+            eventCity,
+            eventState,
+            eventCountry,
+            _clock());
+
+        var statusEvent = new StatusEvent
+        {
+            Status = status,
+            StatusCode = statusCode,
+            Label = label,
+            ReasonCode = reasonCode,
+            OccurredAt = happenedAt,
+            City = eventCity,
+            State = eventState,
+            Country = eventCountry,
+            StopSequence = stop?.Sequence ?? 0,
+            StopOrdinal = load.CurrentStopOrdinal,
+            StopName = stop?.Location.Name ?? string.Empty,
+            Note = note,
+            Edi214 = result.Edi,
+            InterchangeControlNumber = result.InterchangeControlNumber,
+            TransactionControlNumber = result.TransactionControlNumber,
+            RoundTripDiagnostics = result.Diagnostics,
+        };
+
+        load.Events.Add(statusEvent);
+        return statusEvent;
+    }
+
     /// <summary>
-    /// Which stop a status happened at.
+    /// What the event log calls a status change.
     /// </summary>
     /// <remarks>
-    /// Dispatched, at-shipper, loaded and departed all happen at the first pickup; arrival
-    /// and delivery at the last drop. Multi-stop loads make this a simplification — a truck
-    /// arriving at its third of five stops is "at consignee" on this board and the MS1 will
-    /// name the final drop rather than the one it is actually sitting at. Reporting per
-    /// stop means tracking a current-stop pointer, which is the next thing this needs and
-    /// is listed as such rather than pretended away.
+    /// On a two-stop load the plain board vocabulary is clearer than a stop number. On a
+    /// four-stop load it is the other way round: "In transit" three times in a row tells a
+    /// dispatcher nothing, and "Departed stop 2 · Reno NV" tells them everything.
     /// </remarks>
-    private static Stop? StopFor(Load load, LoadStatus status) => status switch
+    private static string EventLabel(Load load, LoadStatus status)
     {
-        LoadStatus.Dispatched or LoadStatus.AtShipper or LoadStatus.Loaded => load.Origin,
-        LoadStatus.InTransit => load.Origin,
-        LoadStatus.AtConsignee or LoadStatus.Delivered => load.Destination,
-        _ => null,
-    };
+        if (!load.IsMultiStop)
+        {
+            return StatusCatalog.DescribeStatus(status);
+        }
+
+        int ordinal = load.CurrentStopOrdinal;
+
+        return status switch
+        {
+            LoadStatus.AtShipper or LoadStatus.AtConsignee => $"Arrived stop {ordinal} of {load.Stops.Count}",
+            LoadStatus.Loaded => $"Loaded at stop {ordinal}",
+            LoadStatus.InTransit => $"Departed stop {ordinal} of {load.Stops.Count}",
+            LoadStatus.Delivered => "Delivered — final stop",
+            _ => StatusCatalog.DescribeStatus(status),
+        };
+    }
+
+    /// <summary>The label for the work-finished event emitted when leaving a stop mid-route.</summary>
+    private static string CompletionLabel(Load load, bool atPickup)
+    {
+        string verb = atPickup ? "Loaded" : "Unloaded";
+        return load.IsMultiStop
+            ? $"{verb} at stop {load.CurrentStopOrdinal} of {load.Stops.Count}"
+            : verb;
+    }
 
     private static string Coalesce(params string?[] values) =>
         values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? string.Empty;

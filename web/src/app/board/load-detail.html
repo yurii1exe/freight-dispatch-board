@@ -41,7 +41,7 @@
     <section class="advance">
       @if (load.summary.nextStatus) {
         <button class="primary" (click)="send()" [disabled]="busy()">
-          Send 214 → {{ load.summary.nextStatusLabel }}
+          Send 214 → {{ load.summary.nextActionLabel }}
         </button>
         <label class="field">
           <span class="eyebrow">Happened at</span>
@@ -80,17 +80,36 @@
       <section class="block">
         <div class="block-head">
           <span class="eyebrow">Stops</span>
-          <span class="dim">{{ load.stops.length }} · S5 loop</span>
+          @if (load.summary.isMultiStop && load.summary.statusOrder > 0) {
+            <span class="here-note">
+              truck at stop {{ load.summary.currentStopOrdinal }} of {{ load.stops.length }}
+            </span>
+          } @else {
+            <span class="dim">{{ load.stops.length }} · S5 loop</span>
+          }
         </div>
 
         <ol class="stops">
           @for (stop of load.stops; track stop.sequence) {
-            <li [class.pickup]="stop.isPickup">
-              <div class="seq">{{ stop.sequence }}</div>
+            <li
+              [class.pickup]="stop.isPickup"
+              [class.current]="stop.isCurrent && load.summary.statusOrder > 0"
+              [class.done]="stop.isComplete"
+            >
+              <div class="seq">
+                @if (stop.isComplete) {
+                  ✓
+                } @else {
+                  {{ stop.sequence }}
+                }
+              </div>
               <div class="stop-body">
                 <div class="stop-top">
                   <b class="truncate">{{ stop.location.name }}</b>
                   <span class="code-chip" [title]="'S502 ' + stop.reasonCode">{{ stop.reasonName }}</span>
+                  @if (stop.isCurrent && load.summary.statusOrder > 0 && !stop.isComplete) {
+                    <span class="here">truck here</span>
+                  }
                 </div>
                 <div class="muted">
                   {{ stop.location.address1 }}@if (stop.location.address2) {, {{ stop.location.address2 }}}

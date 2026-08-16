@@ -152,17 +152,15 @@ public static class DemoTenders
 
             Load load = board.Tender(edi).Single();
 
-            foreach (LoadStatus status in StatusCatalog.All.Skip(1))
+            // Back-date the events so the history reads like a load that has been running
+            // rather than six updates keyed in the same second.
+            int step = 0;
+            while (StatusCatalog.Next(load.Status, load.StopsRemainAfterCurrent) is { } next &&
+                   next <= lane.SeedTo &&
+                   step < 24)
             {
-                if (status > lane.SeedTo)
-                {
-                    break;
-                }
-
-                // Back-date the events so the history reads like a load that has been
-                // running rather than six updates keyed in the same second.
-                int stepsBack = lane.SeedTo - status + 1;
-                board.Advance(load.Id, status, today.AddHours(-2 * stepsBack));
+                step++;
+                board.Advance(load.Id, next, today.AddHours(-2 * ((int)lane.SeedTo - step + 1)));
             }
         }
     }

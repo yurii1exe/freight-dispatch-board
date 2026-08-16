@@ -285,6 +285,8 @@ public static class Edi204Reader
 
         CloseParty();
 
+        List<Stop> ordered = stops.OrderBy(s => s.Sequence).Select(s => s.Build()).ToList();
+
         return new Load
         {
             ShipmentId = shipmentId,
@@ -300,7 +302,11 @@ public static class Edi204Reader
             References = headerReferences,
             Notes = headerNotes,
             BillTo = billTo,
-            Stops = stops.OrderBy(s => s.Sequence).Select(s => s.Build()).ToList(),
+            Stops = ordered,
+
+            // The truck starts at the first stop. Everything the board reports afterwards is
+            // relative to this pointer.
+            CurrentStopSequence = ordered.Count > 0 ? ordered[0].Sequence : 0,
             TenderedBy = interchange.SenderId,
             TenderedTo = interchange.ReceiverId,
             IsProduction = interchange.IsProduction,

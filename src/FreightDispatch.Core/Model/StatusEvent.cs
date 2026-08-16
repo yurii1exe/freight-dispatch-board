@@ -23,6 +23,21 @@ public sealed class StatusEvent
     public string ReasonCode { get; init; } = "NS";
 
     /// <summary>
+    /// What the board calls this event. Stop-aware on a multi-stop load — "Unloaded at stop
+    /// 2" says something "Delivered" does not when there are two more drops to run.
+    /// </summary>
+    public string Label { get; init; } = string.Empty;
+
+    /// <summary>S501 of the stop this happened at.</summary>
+    public int StopSequence { get; init; }
+
+    /// <summary>1-based position of that stop in the run.</summary>
+    public int StopOrdinal { get; init; }
+
+    /// <summary>Name of the party at that stop, for the event log.</summary>
+    public string StopName { get; init; } = string.Empty;
+
+    /// <summary>
     /// AT705/AT706, when it happened, in local time at the location. Not UTC: X12 carries
     /// no offset and AT707 says <c>LT</c>.
     /// </summary>

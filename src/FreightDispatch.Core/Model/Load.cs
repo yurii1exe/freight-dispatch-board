@@ -80,6 +80,48 @@ public sealed class Load
     /// <summary>Current board state.</summary>
     public LoadStatus Status { get; set; } = LoadStatus.Tendered;
 
+    /// <summary>
+    /// S501 of the stop the truck is working now — the one it has arrived at, or the one it
+    /// is running to.
+    /// </summary>
+    /// <remarks>
+    /// Without this a multi-stop load has nowhere to say where the truck actually is, and
+    /// every status message names the final drop. On the four-stop reefer that means telling
+    /// the partner the freight was delivered in Fresno, which is where it loaded.
+    /// </remarks>
+    public int CurrentStopSequence { get; set; }
+
+    /// <summary>The stop the truck is working now.</summary>
+    public Stop? CurrentStop =>
+        Stops.FirstOrDefault(s => s.Sequence == CurrentStopSequence) ?? Stops.FirstOrDefault();
+
+    /// <summary>1-based position of the current stop in the run, for "stop 2 of 4".</summary>
+    public int CurrentStopOrdinal
+    {
+        get
+        {
+            for (int i = 0; i < Stops.Count; i++)
+            {
+                if (Stops[i].Sequence == CurrentStopSequence)
+                {
+                    return i + 1;
+                }
+            }
+
+            return Stops.Count == 0 ? 0 : 1;
+        }
+    }
+
+    /// <summary>The next stop after the current one, or null when the truck is on its last.</summary>
+    public Stop? NextStop =>
+        Stops.FirstOrDefault(s => s.Sequence > CurrentStopSequence);
+
+    /// <summary>True when there is still a stop to run after the current one.</summary>
+    public bool StopsRemainAfterCurrent => NextStop is not null;
+
+    /// <summary>True when this load has more than a straight pickup and drop.</summary>
+    public bool IsMultiStop => Stops.Count > 2;
+
     /// <summary>Every status change, oldest first, each carrying its generated 214.</summary>
     public List<StatusEvent> Events { get; } = new();
 

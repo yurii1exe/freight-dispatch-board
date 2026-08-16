@@ -98,16 +98,21 @@ export class BoardService {
     });
   }
 
-  /** Moves a load to its next status. The 214 comes back on the event. */
+  /**
+   * Moves a load to its next status.
+   *
+   * Returns a list because leaving an intermediate stop is two status messages — the work
+   * finishing and the truck departing. One click, two 214s.
+   */
   async advance(
     id: string,
     status: StatusKey,
     occurredAt: string | null,
     note: string | null,
-  ): Promise<StatusEventDto | null> {
+  ): Promise<StatusEventDto[] | null> {
     return this.run(async () => {
-      const event = await firstValueFrom(
-        this.http.post<StatusEventDto>(`/api/loads/${id}/status`, {
+      const events = await firstValueFrom(
+        this.http.post<StatusEventDto[]>(`/api/loads/${id}/status`, {
           status,
           occurredAt,
           reasonCode: 'NS',
@@ -119,7 +124,7 @@ export class BoardService {
 
       await this.refresh();
       await this.select(id);
-      return event;
+      return events;
     });
   }
 

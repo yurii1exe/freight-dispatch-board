@@ -10,6 +10,11 @@ minimal API, Angular, and a screen you can read.
 
 ![The board](docs/board.png)
 
+A 204 pasted in, the load landing on the board, and six status changes walking it through a
+four-stop run — with the generated 214 alongside at every step:
+
+![204 in, board, 214 out](docs/board-demo.gif)
+
 ## The loop
 
 ```
@@ -41,6 +46,10 @@ is a generator that works until the first partner tries it.
 Loads move forward one step at a time. There is no path back, because a 214 is a statement
 about something that happened and you cannot un-send it — the correction is a further 214,
 not a rewrite.
+
+**The codes depend on the stop, not only on the state.** Arriving somewhere is `X3` at a
+pickup and `X1` at a delivery; finishing there is `CP` against `D1`; leaving is `AF` against
+`CD`. So the table above is the two-stop case, and a load with more stops than that cycles.
 
 Partners do vary. Some want `AF` for departure and nothing for loading, some want `X6` pings
 every four hours in transit, some reject `XB` outright because they treat the 990 as the
@@ -155,6 +164,42 @@ The 214 also travels back the way the 204 came, so sender and receiver swap. Get
 backwards produces a file the partner routes into its own inbound queue and then reports as
 an unknown sender.
 
+## Multi-stop loads
+
+A truckload move is a sequence of stops, not a pickup and a delivery. Three pickups and a
+drop is ordinary; so is one pickup and four drops. The board carries a **current-stop
+pointer** and every status message is reported against it, so a 214 sent from stop two of
+four says stop two.
+
+The pointer moves on *departure*, not arrival — that is the moment the truck stops being at
+one place and starts running to the next. And leaving a stop it had arrived at produces
+**two** status messages from one click, because the work finishing and the truck leaving are
+different codes and a partner tracking a multi-drop load needs both. The `D1` is the proof of
+delivery for that stop's freight.
+
+`samples/204-reefer-multi-stop.edi` — load in Fresno, part-unload in Reno, part-unload in
+Salt Lake City, complete unload in Denver — runs like this, and there is a test asserting
+exactly this sequence:
+
+```
+XB  FRESNO           acknowledged, heading to the pickup
+X3  FRESNO           arrived at pickup
+CP  FRESNO           loading complete
+AF  FRESNO           departed the pickup with the freight
+X1  RENO             arrived at drop one
+D1  RENO             part unload complete
+CD  RENO             departed drop one
+X1  SALT LAKE CITY
+D1  SALT LAKE CITY
+CD  SALT LAKE CITY
+X1  DENVER           arrived at the final drop
+D1  DENVER           complete unload — the load is done
+```
+
+The board shows `2/4` on the row and marks the stop the truck is at in the detail panel,
+with the stops behind it ticked off. A two-stop load walks straight through and never sees
+the cycle.
+
 ## Delimiters are declared, not assumed
 
 `samples/204-flatbed-pipe-delimited.edi` uses `|` as the element separator, `>` as the
@@ -183,7 +228,8 @@ out why the partner rejected it — and meanwhile the truck still has to be disp
 ```
 src/FreightDispatch.Core     model, 204 reader, 204/214 writers, the board
 src/FreightDispatch.Api      minimal API, DTOs, seed data
-tests/FreightDispatch.Tests  43 tests, including a full 204 round trip
+tests/FreightDispatch.Tests  52 tests, including a full 204 round trip and the
+                             twelve-message walk of the four-stop reefer
 web/                         Angular client
 samples/                     the four sample tenders
 ```
@@ -212,7 +258,12 @@ Committee X12. "X12" is used here only to name the standard it reads.
 State is in memory, one process. A real board needs the loads, the status events and the
 control number sequence in one durable transaction — those three going out of step is how a
 partner ends up with two interchanges numbered `000000417` and no way to tell which one was
-the delivery. See `PORTFOLIO-PLAN.md` for the rest.
+the delivery.
+
+There are no exception statuses yet: the board can report a load going right and not a load
+going wrong. `SD` Shipment Delayed with a real element 1651 reason — `AO` weather, `AI`
+mechanical breakdown, `B1` consignee closed — is the next thing it needs, because delays are
+most of what a dispatcher actually keys.
 
 ## License
 

@@ -119,7 +119,7 @@ app.MapPost("/api/loads/tender", async Task<Results<Ok<TenderResult>, BadRequest
 // ---------------------------------------------------------------------------
 
 app.MapPost("/api/loads/{id:guid}/status",
-        Results<Ok<StatusEventDto>, NotFound, BadRequest<ProblemDetails>> (
+        Results<Ok<List<StatusEventDto>>, NotFound, BadRequest<ProblemDetails>> (
             Guid id,
             AdvanceRequest body,
             LoadBoard board) =>
@@ -139,7 +139,7 @@ app.MapPost("/api/loads/{id:guid}/status",
 
             try
             {
-                StatusEvent statusEvent = board.Advance(
+                IReadOnlyList<StatusEvent> emitted = board.Advance(
                     id,
                     status,
                     body.OccurredAt,
@@ -148,7 +148,7 @@ app.MapPost("/api/loads/{id:guid}/status",
                     body.State,
                     body.Note);
 
-                return TypedResults.Ok(Contracts.ToEvent(statusEvent));
+                return TypedResults.Ok(emitted.Select(Contracts.ToEvent).ToList());
             }
             catch (InvalidOperationException ex)
             {
@@ -156,7 +156,7 @@ app.MapPost("/api/loads/{id:guid}/status",
             }
         })
     .WithName("AdvanceStatus")
-    .WithSummary("Moves a load to its next status and generates the 214 that reports it.");
+    .WithSummary("Moves a load to its next status and generates the 214s that report it. Leaving an intermediate stop produces two.");
 
 app.MapGet("/api/loads/{id:guid}/events/{eventId:guid}/edi",
         Results<ContentHttpResult, NotFound> (Guid id, Guid eventId, LoadBoard board) =>
@@ -186,15 +186,31 @@ app.MapGet("/api/loads/{id:guid}/edi/204",
 // ---------------------------------------------------------------------------
 
 app.MapGet("/api/statuses", () => StatusCatalog.All
-        .Select(s => new StatusOption(
-            s.ToString(),
-            StatusCatalog.DescribeStatus(s),
-            (int)s,
-            s == LoadStatus.Tendered ? string.Empty : StatusCatalog.StatusCodeFor(s),
-            s == LoadStatus.Tendered ? string.Empty : StatusCatalog.DescribeStatusCode(StatusCatalog.StatusCodeFor(s))))
+        .Select(status =>
+        {
+            // The rail shows the pickup leg, which is the two-stop case and what the README
+            // documents. On a multi-drop load the same states emit the delivery codes —
+            // X1 for arrival, D1 for completion, CD for departure — and the detail panel
+            // shows the code that was actually sent on each event.
+            bool pickupLeg = status
+                is LoadStatus.AtShipper
+                or LoadStatus.Loaded
+                or LoadStatus.InTransit;
+
+            string code = status == LoadStatus.Tendered
+                ? string.Empty
+                : StatusCatalog.StatusCodeFor(status, pickupLeg);
+
+            return new StatusOption(
+                status.ToString(),
+                StatusCatalog.DescribeStatus(status),
+                (int)status,
+                code,
+                code.Length == 0 ? string.Empty : StatusCatalog.DescribeStatusCode(code));
+        })
         .ToList())
     .WithName("ListStatuses")
-    .WithSummary("The board states and the X12 element 1650 code each one emits.");
+    .WithSummary("The board states and the X12 element 1650 code each one emits on the pickup leg.");
 
 app.MapGet("/api/samples", (SampleLibrary samples) => samples.All)
     .WithName("ListSamples")

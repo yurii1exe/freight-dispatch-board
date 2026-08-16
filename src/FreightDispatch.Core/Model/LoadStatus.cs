@@ -47,26 +47,61 @@ public enum LoadStatus
 /// hours in transit, some reject <c>XB</c> outright because they treat the 990 as the
 /// acknowledgment. That variation is why this is a table and not a switch statement
 /// buried in the 214 writer.</para>
+/// <para><b>The codes depend on the stop, not only on the state.</b> Arriving somewhere is
+/// <c>X3</c> at a pickup and <c>X1</c> at a delivery; finishing there is <c>CP</c> against
+/// <c>D1</c>; leaving is <c>AF</c> against <c>CD</c>. A board that emits the delivery codes
+/// for every stop is telling a four-stop load's partner that the truck delivered in Fresno,
+/// which is where it loaded.</para>
 /// </remarks>
 public static class StatusCatalog
 {
     /// <summary>
-    /// The X12 element 1650 Shipment Status Code emitted for each board state.
+    /// The X12 element 1650 code for arriving at a stop.
+    /// </summary>
+    /// <param name="atPickup">True when the stop is a pickup (S502 <c>CL</c>, <c>LD</c>, <c>PL</c>).</param>
+    public static string ArrivalCode(bool atPickup) =>
+        atPickup
+            ? "X3"   // Arrived at Pickup Location
+            : "X1";  // Arrived at Delivery Location
+
+    /// <summary>
+    /// The X12 element 1650 code for finishing work at a stop.
+    /// </summary>
+    /// <param name="atPickup">True when the stop is a pickup.</param>
+    public static string CompletionCode(bool atPickup) =>
+        atPickup
+            ? "CP"   // Completed Loading at Pickup Location
+            : "D1";  // Completed Unloading at Delivery Location
+
+    /// <summary>
+    /// The X12 element 1650 code for leaving a stop.
+    /// </summary>
+    /// <param name="fromPickup">True when the stop being left is a pickup.</param>
+    public static string DepartureCode(bool fromPickup) =>
+        fromPickup
+            ? "AF"   // Carrier Departed Pickup Location with Shipment
+            : "CD";  // Carrier Departed Delivery Location
+
+    /// <summary>
+    /// The X12 element 1650 code for a board state, given the kind of stop it happened at.
     /// </summary>
     /// <param name="status">The board state being entered.</param>
-    /// <returns>A two-character element 1650 code.</returns>
+    /// <param name="atPickup">
+    /// True when the stop involved is a pickup. Ignored for
+    /// <see cref="LoadStatus.Dispatched"/>, which is about the shipment rather than a place.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="status"/> is <see cref="LoadStatus.Tendered"/>, which produces no
     /// 214 — the load has not moved and there is nothing to report.
     /// </exception>
-    public static string StatusCodeFor(LoadStatus status) => status switch
+    public static string StatusCodeFor(LoadStatus status, bool atPickup = false) => status switch
     {
-        LoadStatus.Dispatched => "XB",   // Shipment Acknowledged
-        LoadStatus.AtShipper => "X3",    // Arrived at Pickup Location
-        LoadStatus.Loaded => "CP",       // Completed Loading at Pickup Location
-        LoadStatus.InTransit => "AF",    // Carrier Departed Pickup Location with Shipment
-        LoadStatus.AtConsignee => "X1",  // Arrived at Delivery Location
-        LoadStatus.Delivered => "D1",    // Completed Unloading at Delivery Location
+        LoadStatus.Dispatched => "XB",                    // Shipment Acknowledged
+        LoadStatus.AtShipper => ArrivalCode(atPickup: true),
+        LoadStatus.Loaded => CompletionCode(atPickup: true),
+        LoadStatus.InTransit => DepartureCode(atPickup),
+        LoadStatus.AtConsignee => ArrivalCode(atPickup),
+        LoadStatus.Delivered => CompletionCode(atPickup),
         _ => throw new ArgumentOutOfRangeException(
             nameof(status), status,
             "Tendered is the state before any 214 exists. Nothing has happened to report."),
@@ -83,6 +118,7 @@ public static class StatusCatalog
         "X6" => "En Route to Delivery Location",
         "X1" => "Arrived at Delivery Location",
         "D1" => "Completed Unloading at Delivery Location",
+        "CD" => "Carrier Departed Delivery Location",
         "SD" => "Shipment Delayed",
         "AH" => "Attempted Delivery",
         "CA" => "Shipment Cancelled",
@@ -104,21 +140,45 @@ public static class StatusCatalog
     };
 
     /// <summary>
-    /// The status the board offers next. Loads move forward one step at a time; there is
-    /// no path back, because a 214 is a statement about something that happened and you
-    /// cannot un-send it — the correction is a further 214, not a rewrite.
+    /// The status the board offers next.
     /// </summary>
+    /// <remarks>
+    /// <para>The pickup leg runs once and then the board <b>cycles</b>: a truck with three
+    /// drops on it arrives, works the stop, leaves, and arrives again. So
+    /// <see cref="LoadStatus.AtConsignee"/> leads back to <see cref="LoadStatus.InTransit"/>
+    /// while stops remain, and only reaches <see cref="LoadStatus.Delivered"/> at the last
+    /// one.</para>
+    /// <para>There is no path backwards. A 214 is a statement about something that happened
+    /// and you cannot un-send it — the correction is a further 214, not a rewrite.</para>
+    /// </remarks>
     /// <param name="status">The current state.</param>
-    /// <returns>The next state, or null when the load is delivered.</returns>
-    public static LoadStatus? Next(LoadStatus status) =>
-        status == LoadStatus.Delivered ? null : status + 1;
+    /// <param name="stopsRemainAfterCurrent">
+    /// True when the load has stops beyond the one the truck is working now.
+    /// </param>
+    /// <returns>The next state, or null when the load is finished.</returns>
+    public static LoadStatus? Next(LoadStatus status, bool stopsRemainAfterCurrent = false)
+    {
+        if (status == LoadStatus.Delivered)
+        {
+            return null;
+        }
+
+        if (status == LoadStatus.AtConsignee)
+        {
+            return stopsRemainAfterCurrent ? LoadStatus.InTransit : LoadStatus.Delivered;
+        }
+
+        return status + 1;
+    }
 
     /// <summary>
-    /// Whether a transition is one the board allows. Forward by one step only.
+    /// Whether a transition is one the board allows.
     /// </summary>
     /// <param name="from">Current state.</param>
     /// <param name="to">Proposed state.</param>
-    public static bool CanTransition(LoadStatus from, LoadStatus to) => Next(from) == to;
+    /// <param name="stopsRemainAfterCurrent">True when stops remain beyond the current one.</param>
+    public static bool CanTransition(LoadStatus from, LoadStatus to, bool stopsRemainAfterCurrent = false) =>
+        Next(from, stopsRemainAfterCurrent) == to;
 
     /// <summary>Every board state, in order.</summary>
     public static IReadOnlyList<LoadStatus> All { get; } = new[]

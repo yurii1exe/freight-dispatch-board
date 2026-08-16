@@ -104,7 +104,7 @@ public class Edi214WriterTests
         StatusEvent? last = null;
         foreach (LoadStatus step in StatusCatalog.All.Skip(1))
         {
-            last = board.Advance(id, step, occurredAt: Clock);
+            last = board.AdvanceOne(id, step, occurredAt: Clock);
             if (step == status)
             {
                 break;
@@ -126,7 +126,7 @@ public class Edi214WriterTests
         // keyed at 15:40. The 214 has to say 14:10.
         var happened = new DateTime(2026, 8, 18, 14, 10, 0);
         LoadBoard board = Board(out Guid id);
-        StatusEvent statusEvent = board.Advance(id, LoadStatus.Dispatched, occurredAt: happened);
+        StatusEvent statusEvent = board.AdvanceOne(id, LoadStatus.Dispatched, occurredAt: happened);
 
         Segment at7 = Body(statusEvent).Single(s => s.Id == "AT7");
 
@@ -143,11 +143,11 @@ public class Edi214WriterTests
     {
         LoadBoard board = Board(out Guid id);
 
-        board.Advance(id, LoadStatus.Dispatched, occurredAt: Clock);
-        StatusEvent atShipper = board.Advance(id, LoadStatus.AtShipper, occurredAt: Clock);
-        board.Advance(id, LoadStatus.Loaded, occurredAt: Clock);
-        board.Advance(id, LoadStatus.InTransit, occurredAt: Clock);
-        StatusEvent atConsignee = board.Advance(id, LoadStatus.AtConsignee, occurredAt: Clock);
+        board.AdvanceOne(id, LoadStatus.Dispatched, occurredAt: Clock);
+        StatusEvent atShipper = board.AdvanceOne(id, LoadStatus.AtShipper, occurredAt: Clock);
+        board.AdvanceOne(id, LoadStatus.Loaded, occurredAt: Clock);
+        board.AdvanceOne(id, LoadStatus.InTransit, occurredAt: Clock);
+        StatusEvent atConsignee = board.AdvanceOne(id, LoadStatus.AtConsignee, occurredAt: Clock);
 
         Segment pickup = Body(atShipper).Single(s => s.Id == "MS1");
         Assert.Equal("JOLIET", pickup[1]);
@@ -189,7 +189,7 @@ public class Edi214WriterTests
 
         LoadBoard reefer = new(new ControlNumbers(9001), () => Clock);
         Guid id = reefer.Tender(Samples.Read(Samples.Reefer))[0].Id;
-        StatusEvent statusEvent = reefer.Advance(id, LoadStatus.Dispatched, occurredAt: Clock);
+        StatusEvent statusEvent = reefer.AdvanceOne(id, LoadStatus.Dispatched, occurredAt: Clock);
 
         Segment ms2 = Body(statusEvent).Single(s => s.Id == "MS2");
         Assert.Equal("SMPL", ms2[1]);
@@ -203,7 +203,7 @@ public class Edi214WriterTests
 
         var issued = StatusCatalog.All
             .Skip(1)
-            .Select(status => board.Advance(id, status, occurredAt: Clock).InterchangeControlNumber)
+            .Select(status => board.AdvanceOne(id, status, occurredAt: Clock).InterchangeControlNumber)
             .ToList();
 
         Assert.Equal(issued.Count, issued.Distinct().Count());
@@ -220,7 +220,7 @@ public class Edi214WriterTests
         var board = new LoadBoard(new ControlNumbers(7001), () => Clock);
         Guid id = board.Tender(Samples.Read(Samples.PipeDelimited))[0].Id;
 
-        StatusEvent statusEvent = board.Advance(id, LoadStatus.Dispatched, occurredAt: Clock);
+        StatusEvent statusEvent = board.AdvanceOne(id, LoadStatus.Dispatched, occurredAt: Clock);
 
         Assert.True(statusEvent.RoundTripClean);
         Assert.Equal('*', X12Tokenizer.ReadDelimiters(statusEvent.Edi214).Element);
@@ -251,7 +251,7 @@ public class Edi214WriterTests
     private static StatusEvent Advance(LoadStatus status)
     {
         LoadBoard board = Board(out Guid id);
-        return board.Advance(id, status, occurredAt: Clock);
+        return board.AdvanceOne(id, status, occurredAt: Clock);
     }
 
     private static LoadBoard Board(out Guid loadId)

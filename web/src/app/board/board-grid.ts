@@ -40,6 +40,14 @@ export class BoardGrid {
       equipment: [load.equipmentLabel, load.equipmentLength ? load.equipmentLength + "'" : '']
         .filter(Boolean)
         .join(' '),
+      // A multi-stop row says 2/4 rather than 4, because the count of stops is not the
+      // question a dispatcher is asking. Which one the truck is on is.
+      stopTooltip: load.isMultiStop
+        ? `Stop ${load.currentStopOrdinal} of ${load.stopCount} — ${load.currentStopName}, ${load.currentStopCityState}`
+        : `${load.stopCount} stops`,
+      actionTooltip: load.nextActionLabel
+        ? `Send a 214 — ${load.nextActionLabel}`
+        : '',
     })),
   );
 
