@@ -11,6 +11,15 @@
          installed. Without this, a machine with only the 10.x runtime refuses to start
          a net8.0 app, and CI images move faster than this repo does. -->
     <RollForward>Major</RollForward>
+    <!--
+      When MSBuild builds a .sln it clears Configuration/Platform on the way down to any
+      referenced project the solution does not itself contain. EdiX12.Core is exactly that
+      (see docs/edi-toolkit-dependency.md), so without this `dotnet build -c Release` builds
+      it as Debug and the Release output links a Debug assembly. Every project here is
+      Any CPU and follows the solution configuration, so keeping the parent's values is
+      simply correct.
+    -->
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
   </PropertyGroup>
 
   <!--
