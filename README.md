@@ -11,9 +11,9 @@ That loop is the core of every freight brokerage in the country, and it is norma
 inside a TMS costing five figures a year. This is the smallest honest version of it: .NET 8
 minimal API, Angular, and a screen you can read.
 
-A 204 pasted in, the 997 that answers it, the load landing on the board, six status changes
-walking it through a four-stop run, and the invoice at the end — with the generated file
-alongside at every step:
+A 204 pasted in, the 997 that answers it, the load landing on the board, ten clicks walking
+it through a four-stop run as twelve status messages, and the invoice at the end — with the
+generated file alongside at every step:
 
 ![204 in, 997 back, board, 214s out, 210 at the end](docs/board-demo.gif)
 
@@ -102,8 +102,17 @@ Then:
 cd src/FreightDispatch.Api
 dotnet run
 # http://localhost:5000
+```
 
-# or, for client work, the Angular dev server proxying to the API
+Client work is two terminals, both starting at the repository root: the API on the port the
+dev server proxies to, and the dev server in front of it.
+
+```bash
+cd src/FreightDispatch.Api
+ASPNETCORE_URLS=http://localhost:5199 dotnet run
+```
+
+```bash
 cd web
 npm install
 npm start          # http://localhost:4200, /api proxied to :5199
@@ -123,7 +132,10 @@ ls   src/FreightDispatch.Api/edi-drop/out/     # the 997, seconds later
 ```
 
 ```bash
-cd web && npm ci && npm run build      # writes to src/FreightDispatch.Api/wwwroot
+cd web
+npm ci
+npm run build      # writes to src/FreightDispatch.Api/wwwroot
+npm test           # 26 component specs
 ```
 
 The .NET 8 SDK is the minimum and it is enough: no `global.json` pins anything newer, and the
@@ -271,24 +283,35 @@ real operation escalates on.
 AT7/MS1/MS2 group. Putting it in the heading next to B10 is the intuitive order and the
 wrong one.
 
+Here is a whole one, nothing elided, so the SE01 at the bottom can be counted against the
+segments above it — the truck leaving the pickup on `samples/204-dry-van-2-stop.edi`:
+
 ```
-ISA*00*          *00*          *ZZ*DEMOCARRIER    *ZZ*DEMOBROKER     *260815*1540*^*00501*000004070*0*T*:~
-GS*QM*DEMOCARRIER*DEMOBROKER*20260815*1540*4070*X*005010~
-ST*214*4070~
-B10*LD10041972*LD10041972*DEMO~          B1002 is what the partner matches on
+ISA*00*          *00*          *ZZ*DEMOCARRIER    *ZZ*DEMOBROKER     *260820*1605*^*00501*000004005*0*T*:~
+GS*QM*DEMOCARRIER*DEMOBROKER*20260820*1605*4005*X*005010~
+ST*214*4005~
+B10*LD10041872*LD10041872*DEMO~          B1002 is what the partner matches on
 LX*1~
-L11*LD10041972*OQ~                       the tender's references, echoed back
-L11*BOL8842484*BM~
-AT7*AF*NS***20260815*1540*LT~            the status itself
-MS1*NASHVILLE*TN*US~                     where the truck was
-N1*SH*CUMBERLAND PRECAST*93*CP-NAS~
-N3*3900 CENTRAL PIKE~
-N4*NASHVILLE*TN*37214*US~
-...
-SE*16*4070~
-GE*1*4070~
-IEA*1*000004070~
+L11*LD10041872*OQ~                       the tender's references, echoed back
+L11*BOL8842190*BM~
+AT7*AF*NS***20260818*0715*LT~            the status itself, local time at the stop
+MS1*JOLIET*IL*US~                        where the truck was
+N1*SH*NORTHWIND FOODS PROCESSING*93*NWF-JOL~
+N3*1450 CATERPILLAR DRIVE~
+N4*JOLIET*IL*60436*US~
+N1*CN*BLUE PRAIRIE GROCERS DC 12*93*BPG-MEM12~
+N3*3300 CHANNEL AVENUE~
+N4*MEMPHIS*TN*38113*US~
+SE*14*4005~
+GE*1*4005~
+IEA*1*000004005~
 ```
+
+The ISA and GS carry the moment the file was produced. AT705 and AT706 carry the moment the
+truck left, two days earlier — a status message is a report about the past and the two
+timestamps are routinely days apart. One board means one sequence, so the numbers run
+across the documents rather than within them: the 997 that answered this tender is `4001`,
+the six 214s of the run are `4002` to `4007`, and the 210 that closes it is `4008`.
 
 Three things get written wrong more often than everything else combined, and all three are
 handled by the writer rather than left to the caller:
@@ -309,20 +332,29 @@ reports as an unknown sender.
 Raised when the load delivers, because before the `D1` there is nothing to invoice and a 210
 that arrives before the freight does is a 210 that gets held.
 
+The same load, delivered — the transaction set in full, from the ST to the SE it counts:
+
 ```
 ST*210*4008~
 B3**INV-LD10041872*LD10041872*PP*L*20260820*323758****DEMO~
 C3*USD~
 ITD*01*3*****30~                         net 30 from the invoice date
+N9*OQ*LD10041872~
 N9*BM*BOL8842190~                        qualifier first — the opposite of L11
 G62*11*20260818~                         shipped on this date
 G62*35*20260819~                         delivered on this date
-N1*BT … N1*SH … N1*CN~                   who pays, who shipped, who received
+N1*BT*DEMOBROKER*ZZ*DEMOBROKER~          who pays
+N1*SH*NORTHWIND FOODS PROCESSING*93*NWF-JOL~
+N3*1450 CATERPILLAR DRIVE~
+N4*JOLIET*IL*60436*US~
+N1*CN*BLUE PRAIRIE GROCERS DC 12*93*BPG-MEM12~
+N3*3300 CHANNEL AVENUE~
+N4*MEMPHIS*TN*38113*US~
 LX*1~
 L5*1*CANNED VEGETABLES PALLETIZED~
 L0*1***42150*G***24*PLT**L~
 L1*1*2.5*CW*265375****LHS****LINEHAUL~
-LX*2~
+LX*2~                                    an accessorial: no L5, no L0, just the charge
 L1*2***58383****405****FUEL SURCHARGE 22 PERCENT OF LINEHAUL~
 L3*42150*G***323758******24*L~
 SE*23*4008~
@@ -432,7 +464,7 @@ src/FreightDispatch.Api      minimal API, DTOs, seed data, the integration host
 tests/FreightDispatch.Tests  106 tests, including a full 204 round trip, the twelve-message
                              walk of the four-stop reefer, and an end-to-end run of the whole
                              lifecycle over a real watched directory
-web/                         Angular client
+web/                         Angular client, and 26 component specs beside it
 samples/                     the four sample tenders
 docs/transport.md            ITransport, the file drop, and how AS2 or SFTP would slot in
 docs/tms-adapter.md          the TMS boundary and why the adapter owns the translation
@@ -443,6 +475,29 @@ Envelope parsing is [`EdiX12.Core`](https://github.com/yurii1exe/edi-x12-toolkit
 the delimiters out of the ISA and hands back ST/SE transaction sets, which is why nothing in
 this repository splits on a tilde. It is pinned as a submodule rather than assumed to be
 checked out somewhere; see [docs/edi-toolkit-dependency.md](docs/edi-toolkit-dependency.md).
+
+## Where this goes next
+
+**Durable state, and a durable outbox with it.** State is in memory, one process, and so is
+the outbox. The loads, the status events, the control number sequence and the queue of
+things waiting to be sent belong in one durable transaction — those going out of step is how
+a partner ends up with two interchanges numbered `000000417` and no way to tell which one
+was the delivery. The gateway logs a failed send and moves on.
+
+**Exception statuses.** Every code in the board's status table reports a load going right.
+`SD` Shipment Delayed with a real element 1651 reason — `AO` weather, `AI` mechanical
+breakdown, `B1` consignee closed — is the next one the board takes on, because delays are
+most of what a dispatcher actually keys.
+
+**The 990 and the TA1.** A **990** Response to a Load Tender accepts or declines the *load*,
+where the 997 acknowledges only the *syntax* — the distinction the 997 section above turns
+on, and the one that decides whether a truck is covered. A **TA1** puts interchange-level
+defects such as an IEA02 that does not echo ISA13 on the wire, where today the board records
+them and shows them.
+
+**AK3 and AK4.** The 997 reports what the envelope validator can prove. Segment and element
+notes need a segment-level model of the 204 to populate, and guessing at them would be worse
+than the silence.
 
 ## Provenance
 
@@ -461,27 +516,6 @@ invented rather than borrowed.
 
 This project is not affiliated with, endorsed by, or derived from the Accredited Standards
 Committee X12. "X12" is used here only to name the standard it reads.
-
-## Not built yet
-
-State is in memory, one process, and so is the outbox. A real board needs the loads, the
-status events, the control number sequence and the queue of things waiting to be sent in one
-durable transaction — those going out of step is how a partner ends up with two interchanges
-numbered `000000417` and no way to tell which one was the delivery. The gateway logs a failed
-send and moves on, which is honest and is not enough.
-
-There are no exception statuses yet: the board can report a load going right and not a load
-going wrong. `SD` Shipment Delayed with a real element 1651 reason — `AO` weather, `AI`
-mechanical breakdown, `B1` consignee closed — is the next thing it needs, because delays are
-most of what a dispatcher actually keys.
-
-There is no **990** Response to a Load Tender, so the board acknowledges the *syntax* of a
-tender without ever accepting or declining the *load*. And there is no **TA1**, so
-interchange-level defects are reported in the UI and not on the wire.
-
-The 997 reports what the envelope validator can prove. AK3 and AK4 — segment and element
-notes — would need a segment-level model of the 204 to populate, and guessing at them would
-be worse than the silence.
 
 ## License
 

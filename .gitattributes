@@ -18,3 +18,4 @@
 *.json    text
 *.md      text
 *.png     binary
+*.gif     binary

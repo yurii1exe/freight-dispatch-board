@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- The API is documented in docs/api.md and by the endpoint summaries; XML docs on
-         top-level statements in Program.cs would be noise, and CS1591 on a web project
-         with no public surface is not a warning worth honouring. -->
+    <!-- The API is documented by the endpoint summaries in Program.cs; XML docs on
+         top-level statements would be noise, and CS1591 on a web project with no public
+         surface is not a warning worth honouring. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 

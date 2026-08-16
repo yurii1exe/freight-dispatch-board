@@ -72,7 +72,12 @@
           }
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "setupFiles": [
+              "src/app/testing/vitest-setup.ts"
+            ]
+          }
         }
       }
     }

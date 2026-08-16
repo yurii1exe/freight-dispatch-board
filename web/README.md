@@ -6,6 +6,7 @@ Angular 21, standalone components, signals, no router — the board is one scree
 npm install
 npm start        # http://localhost:4200, /api proxied to the API on :5199
 npm run build    # writes to ../src/FreightDispatch.Api/wwwroot
+npm test         # 26 component specs, vitest on jsdom
 ```
 
 `npm start` expects `FreightDispatch.Api` to already be running on port 5199
