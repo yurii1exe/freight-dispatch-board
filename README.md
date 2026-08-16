@@ -8,12 +8,12 @@ That loop is the core of every freight brokerage in the country, and it is norma
 inside a TMS costing five figures a year. This is the smallest honest version of it: .NET 8
 minimal API, Angular, and a screen you can read.
 
-![The board](docs/board.png)
-
 A 204 pasted in, the load landing on the board, and six status changes walking it through a
 four-stop run — with the generated 214 alongside at every step:
 
 ![204 in, board, 214 out](docs/board-demo.gif)
+
+![The board](docs/board.png)
 
 ## The loop
 
@@ -58,6 +58,25 @@ switch statement buried in the 214 writer.
 
 ## Running it
 
+**Clone with `--recurse-submodules`.** X12 envelope parsing comes from
+[edi-x12-toolkit](https://github.com/yurii1exe/edi-x12-toolkit), which is not on NuGet yet and
+is pinned here as a submodule under `external/`:
+
+```bash
+git clone --recurse-submodules https://github.com/yurii1exe/freight-dispatch-board.git
+cd freight-dispatch-board
+dotnet build -c Release
+dotnet test  -c Release      # 52 tests
+```
+
+Already cloned without it? `git submodule update --init --recursive`. That is also exactly
+what the build tells you to run if the submodule is missing — it fails with one line naming
+the command, not a wall of "the type or namespace `EdiX12` could not be found". When the
+package is published this becomes a `PackageReference` and the submodule goes away; the steps
+are written down in [docs/edi-toolkit-dependency.md](docs/edi-toolkit-dependency.md).
+
+Then:
+
 ```bash
 # API + the compiled client on one origin
 cd src/FreightDispatch.Api
@@ -75,9 +94,7 @@ to a spread of statuses. Everything arrives through the same `Tender()` path as 
 file, so the seed is also a smoke test of the reader every time the process starts.
 
 ```bash
-dotnet build -c Release
-dotnet test
-cd web && npm run build      # writes to src/FreightDispatch.Api/wwwroot
+cd web && npm ci && npm run build      # writes to src/FreightDispatch.Api/wwwroot
 ```
 
 The .NET 8 SDK is the minimum and it is enough: no `global.json` pins anything newer, and the
@@ -232,12 +249,13 @@ tests/FreightDispatch.Tests  52 tests, including a full 204 round trip and the
                              twelve-message walk of the four-stop reefer
 web/                         Angular client
 samples/                     the four sample tenders
+external/edi-x12-toolkit     submodule — EdiX12.Core, until it is on NuGet
 ```
 
-Envelope parsing is [`EdiX12.Core`](../edi-x12-toolkit) — it reads the delimiters out of the
-ISA and hands back ST/SE transaction sets, which is why nothing in this repository splits on
-a tilde. It is currently a project reference to the sibling repository; see
-[docs/edi-toolkit-dependency.md](docs/edi-toolkit-dependency.md).
+Envelope parsing is [`EdiX12.Core`](https://github.com/yurii1exe/edi-x12-toolkit) — it reads
+the delimiters out of the ISA and hands back ST/SE transaction sets, which is why nothing in
+this repository splits on a tilde. It is pinned as a submodule rather than assumed to be
+checked out somewhere; see [docs/edi-toolkit-dependency.md](docs/edi-toolkit-dependency.md).
 
 ## Provenance
 
