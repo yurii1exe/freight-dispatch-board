@@ -29,9 +29,27 @@ public static class Edi204Reader
     /// rather than throwing — that is a routing mistake, not a parse failure.
     /// </returns>
     /// <exception cref="EdiX12.Core.X12ParseException">The ISA is unreadable or the envelope is nested illegally.</exception>
-    public static IReadOnlyList<Load> Read(string ediText)
+    public static IReadOnlyList<Load> Read(string ediText) =>
+        Read(X12Parser.Parse(ediText), ediText);
+
+    /// <summary>
+    /// Walks an interchange that has already been parsed.
+    /// </summary>
+    /// <remarks>
+    /// The overload exists because the 997 has to be built from the same parse the loads
+    /// came from. Parsing twice would work and would be one line shorter, and it would also
+    /// mean the acknowledgment could in principle disagree with the board about what was in
+    /// the file.
+    /// </remarks>
+    /// <param name="interchange">The parsed interchange.</param>
+    /// <param name="ediText">The text it was parsed from, kept on each load as received.</param>
+    /// <returns>One <see cref="Load"/> per 204 transaction set.</returns>
+    public static IReadOnlyList<Load> Read(Interchange interchange, string ediText)
     {
-        Interchange interchange = X12Parser.Parse(ediText);
+        if (interchange is null)
+        {
+            throw new ArgumentNullException(nameof(interchange));
+        }
 
         IReadOnlyList<string> diagnostics = interchange
             .Validate()
@@ -310,6 +328,7 @@ public static class Edi204Reader
             TenderedBy = interchange.SenderId,
             TenderedTo = interchange.ReceiverId,
             IsProduction = interchange.IsProduction,
+            TransactionControlNumber = transaction.ControlNumber,
             SourceEdi = ediText,
             TenderDiagnostics = diagnostics,
             Status = LoadStatus.Tendered,

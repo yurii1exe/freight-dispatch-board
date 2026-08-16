@@ -97,8 +97,17 @@
           <td class="c mono dim">{{ row.load.eventCount || '—' }}</td>
 
           <td class="act">
-            @if (row.load.hasTenderDiagnostics) {
+            @if (row.load.tenderRejected) {
+              <span
+                class="flag bad"
+                title="The 997 refused this tender. The row stays: there is still a truck expected at a dock."
+                >997 R</span
+              >
+            } @else if (row.load.hasTenderDiagnostics) {
               <span class="flag" title="The inbound 204 has envelope diagnostics">EDI</span>
+            }
+            @if (row.load.hasInvoice) {
+              <span class="flag paid" [title]="row.invoiceTooltip">210</span>
             }
             @if (row.load.nextStatus) {
               <button

@@ -34,31 +34,38 @@ public static class BoardSeeder
     /// <param name="now">Local "now", which the demo windows are laid out around.</param>
     public static void Seed(LoadBoard board, SampleLibrary samples, DateTime now)
     {
-        board.Clear();
-
-        foreach ((string name, LoadStatus seedTo) in Progress)
+        // Quietly. The seeded loads are a demonstration fixture and are not traffic: every
+        // one of them goes through the real Tender and Advance paths, which is the point,
+        // but replaying eighty interchanges at a partner on every process restart would be
+        // a bug in service and is noise in a demo.
+        board.WithoutSending(() =>
         {
-            SampleTender? sample = samples.Find(name);
-            if (sample is null)
+            board.Clear();
+
+            foreach ((string name, LoadStatus seedTo) in Progress)
             {
-                continue;
+                SampleTender? sample = samples.Find(name);
+                if (sample is null)
+                {
+                    continue;
+                }
+
+                Load load = board.Tender(sample.Edi).First();
+
+                // Walk the board's own transition graph rather than the enum order, so a
+                // multi-stop load cycles through its drops the way it would in service.
+                int step = 0;
+                while (StatusCatalog.Next(load.Status, load.StopsRemainAfterCurrent) is { } next &&
+                       next <= seedTo &&
+                       step < 24)
+                {
+                    step++;
+                    board.Advance(load.Id, next, now.AddHours(-3 * (SeedDepth(seedTo) - step + 1)));
+                }
             }
 
-            Load load = board.Tender(sample.Edi).First();
-
-            // Walk the board's own transition graph rather than the enum order, so a
-            // multi-stop load cycles through its drops the way it would in service.
-            int step = 0;
-            while (StatusCatalog.Next(load.Status, load.StopsRemainAfterCurrent) is { } next &&
-                   next <= seedTo &&
-                   step < 24)
-            {
-                step++;
-                board.Advance(load.Id, next, now.AddHours(-3 * (SeedDepth(seedTo) - step + 1)));
-            }
-        }
-
-        DemoTenders.Seed(board, now);
+            DemoTenders.Seed(board, now);
+        });
     }
 
     /// <summary>How many transitions it takes to reach a status, for spacing the back-dates.</summary>

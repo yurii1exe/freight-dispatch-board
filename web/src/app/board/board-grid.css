@@ -163,6 +163,20 @@ tbody tr.row.selected td.act button {
   border: 1px solid rgba(255, 176, 32, 0.35);
 }
 
+/* A 997 rejection is not a warning, it is a thing somebody has to ring the partner about. */
+.flag.bad {
+  color: #ffb4ab;
+  background: rgba(255, 96, 80, 0.12);
+  border-color: rgba(255, 96, 80, 0.4);
+}
+
+/* The load is closed at the money. */
+.flag.paid {
+  color: #9ae6b4;
+  background: rgba(63, 185, 80, 0.1);
+  border-color: rgba(63, 185, 80, 0.32);
+}
+
 .done {
   font-size: 10.5px;
   color: var(--muted-2);

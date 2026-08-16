@@ -68,6 +68,16 @@ public sealed class Load
     /// <summary>True when ISA15 was <c>P</c>. A test tender should never reach the board unflagged.</summary>
     public bool IsProduction { get; init; }
 
+    /// <summary>
+    /// ST02 of the 204 transaction set this load came out of.
+    /// </summary>
+    /// <remarks>
+    /// Kept because it is the only handle the 997 has on an individual document: AK202
+    /// echoes it, and matching a rejection back to the load it rejected is done on this
+    /// value and nothing else.
+    /// </remarks>
+    public string TransactionControlNumber { get; init; } = string.Empty;
+
     /// <summary>The 204 exactly as received, kept so the board can show the wire next to the human view.</summary>
     public string SourceEdi { get; init; } = string.Empty;
 
@@ -76,6 +86,38 @@ public sealed class Load
 
     /// <summary>Envelope diagnostics from parsing the inbound 204, if the sender got something wrong.</summary>
     public IReadOnlyList<string> TenderDiagnostics { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The 997 that went back for the interchange this load arrived in.
+    /// </summary>
+    /// <remarks>
+    /// Shared by every load in the same interchange, because a 997 acknowledges functional
+    /// groups and not individual documents. A file carrying three tenders produces one
+    /// acknowledgment with three AK2/AK5 loops in it, and all three loads point at it.
+    /// </remarks>
+    public FunctionalAcknowledgment? Acknowledgment { get; set; }
+
+    /// <summary>
+    /// The 210 invoice, once the load has delivered. Null before that, because there is
+    /// nothing to bill for freight that has not moved.
+    /// </summary>
+    public FreightInvoice? Invoice { get; set; }
+
+    /// <summary>The AK5 loop of this load's own transaction set, out of the 997 that was sent.</summary>
+    public AcknowledgedTransactionSet? TenderAcknowledgment =>
+        Acknowledgment?.Groups
+            .SelectMany(g => g.TransactionSets)
+            .FirstOrDefault(t => t.ControlNumber == TransactionControlNumber);
+
+    /// <summary>
+    /// True when the 997 told the partner this tender was refused.
+    /// </summary>
+    /// <remarks>
+    /// The load is on the board regardless, and that is deliberate — a dispatcher still has
+    /// a truck to cover while the sender fixes their file. This flag is what marks the row
+    /// so nobody has to guess which of the two facts they are looking at.
+    /// </remarks>
+    public bool TenderRejected => TenderAcknowledgment?.AcknowledgmentCode == "R";
 
     /// <summary>Current board state.</summary>
     public LoadStatus Status { get; set; } = LoadStatus.Tendered;

@@ -4,6 +4,8 @@ using FreightDispatch.Api;
 using FreightDispatch.Core;
 using FreightDispatch.Core.Edi;
 using FreightDispatch.Core.Model;
+using FreightDispatch.Core.Tms;
+using FreightDispatch.Core.Transport;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,6 +20,44 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 // remarks on LoadBoard: this is a demonstration of the loop, not a durable TMS.
 builder.Services.AddSingleton(_ => new LoadBoard());
 builder.Services.AddSingleton<SampleLibrary>();
+
+// ---------------------------------------------------------------------------
+// Integration seams
+// ---------------------------------------------------------------------------
+
+// The file drop is on by default and can be pointed anywhere, which is what makes it
+// demonstrable: `dotnet run --FileDrop:Root=/srv/partner-x` and a partner's SFTP mount is
+// the integration. Set FileDrop:Enabled=false and the board still works from the paste box.
+bool fileDropEnabled = builder.Configuration.GetValue("FileDrop:Enabled", defaultValue: true);
+
+if (fileDropEnabled)
+{
+    string root = builder.Configuration.GetValue<string>("FileDrop:Root")
+        ?? Path.Combine(builder.Environment.ContentRootPath, "edi-drop");
+
+    builder.Services.AddSingleton<ITransport>(_ => new FileDropTransport(new FileDropOptions
+    {
+        Root = root,
+    }));
+
+    builder.Services.AddSingleton(services => new TransportGateway(
+        services.GetRequiredService<LoadBoard>(),
+        services.GetRequiredService<ITransport>()));
+}
+
+// A mock, deliberately. See ITmsAdapter: this repository ships the boundary and nothing
+// that connects to any named commercial system.
+builder.Services.AddSingleton<MockTmsAdapter>();
+builder.Services.AddSingleton<ITmsAdapter>(s => s.GetRequiredService<MockTmsAdapter>());
+builder.Services.AddSingleton(s => new TmsBridge(
+    s.GetRequiredService<LoadBoard>(),
+    s.GetRequiredService<ITmsAdapter>()));
+
+builder.Services.AddSingleton<IHostedService>(s => new IntegrationHost(
+    s.GetRequiredService<LoadBoard>(),
+    s.GetRequiredService<TmsBridge>(),
+    s.GetRequiredService<ILogger<IntegrationHost>>(),
+    s.GetService<TransportGateway>()));
 
 // The Angular dev server runs on its own origin. In a published build the API serves the
 // compiled client from wwwroot and the same-origin case applies, so this policy only ever
@@ -41,6 +81,9 @@ app.UseStaticFiles();
 // A board that starts empty demonstrates nothing. Seeding also runs the 204 reader over
 // every bundled sample at startup, so a broken walk shows up as an empty grid rather than
 // as a surprise the first time someone pastes a file.
+//
+// It happens before the integration host starts, and inside WithoutSending, so a restart
+// does not put eighty interchanges into a partner's directory.
 BoardSeeder.Seed(
     app.Services.GetRequiredService<LoadBoard>(),
     app.Services.GetRequiredService<SampleLibrary>(),
@@ -87,27 +130,37 @@ app.MapPost("/api/loads/tender", async Task<Results<Ok<TenderResult>, BadRequest
 
         try
         {
-            IReadOnlyList<Load> loads = board.Tender(edi);
+            // Receive rather than Tender: the 997 is generated whatever the file turns out
+            // to be, and an interchange that produced no loads is exactly the case where
+            // the caller most needs to see what went back to the partner.
+            TenderReceipt receipt = board.Receive(edi);
             X12Delimiters delimiters = X12Tokenizer.ReadDelimiters(edi);
             int segmentCount = X12Tokenizer.Tokenize(edi).Count;
 
+            if (!receipt.HasLoads)
+            {
+                ProblemDetails problem = Problem("Not a load tender", receipt.Explanation);
+                problem.Extensions["acknowledgment"] = receipt.Acknowledgment.Edi;
+                problem.Extensions["verdict"] = receipt.Acknowledgment.Verdict;
+                return TypedResults.BadRequest(problem);
+            }
+
             return TypedResults.Ok(new TenderResult(
-                loads.Select(Contracts.ToSummary).ToList(),
-                loads[0].TenderDiagnostics,
+                receipt.Loads.Select(Contracts.ToSummary).ToList(),
+                receipt.Loads[0].TenderDiagnostics,
                 segmentCount,
-                delimiters.ToString()));
+                delimiters.ToString(),
+                Contracts.ToAcknowledgment(receipt.Loads[0]),
+                receipt.Explanation));
         }
         catch (X12ParseException ex)
         {
-            // A structural failure means the file could not be read at all. Say where.
+            // A structural failure means the file could not be read at all. There is no
+            // sender to acknowledge to and no control number to quote, so no 997 goes back.
             return TypedResults.BadRequest(Problem(
                 "Unreadable interchange",
                 ex.Message,
                 ex.SegmentPosition));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return TypedResults.BadRequest(Problem("Not a load tender", ex.Message));
         }
     })
     .Accepts<TenderRequest>("text/plain", "application/json")
@@ -181,6 +234,113 @@ app.MapGet("/api/loads/{id:guid}/edi/204",
     .WithName("GetTenderEdi")
     .WithSummary("The 204 this load arrived on, byte for byte as received.");
 
+app.MapGet("/api/loads/{id:guid}/edi/997",
+        Results<ContentHttpResult, NotFound> (Guid id, LoadBoard board) =>
+        {
+            string? edi = board.Find(id)?.Acknowledgment?.Edi;
+
+            return string.IsNullOrEmpty(edi)
+                ? TypedResults.NotFound()
+                : TypedResults.Text(edi, "application/edi-x12");
+        })
+    .WithName("GetAcknowledgmentEdi")
+    .WithSummary("The 997 that went back for the interchange this load arrived in.");
+
+app.MapGet("/api/loads/{id:guid}/edi/210",
+        Results<ContentHttpResult, NotFound> (Guid id, LoadBoard board) =>
+        {
+            string? edi = board.Find(id)?.Invoice?.Edi;
+
+            return string.IsNullOrEmpty(edi)
+                ? TypedResults.NotFound()
+                : TypedResults.Text(edi, "application/edi-x12");
+        })
+    .WithName("GetInvoiceEdi")
+    .WithSummary("The 210 raised when this load delivered. 404 until it has.");
+
+// ---------------------------------------------------------------------------
+// Integration seams
+// ---------------------------------------------------------------------------
+
+app.MapGet("/api/transport", Results<Ok<TransportStatus>, NotFound> (IServiceProvider services) =>
+    {
+        // Resolved rather than injected because the gateway is only registered when the
+        // file drop is switched on, and a minimal API parameter of an unregistered type is
+        // bound from the request body.
+        var gateway = services.GetService<TransportGateway>();
+
+        if (gateway?.Transport is not FileDropTransport drop)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return TypedResults.Ok(new TransportStatus(
+            gateway.Transport.Name,
+            gateway.Transport.Endpoint,
+            gateway.Transport.IsRunning,
+            drop.InboundDirectory,
+            drop.OutboundDirectory,
+            drop.ProcessedDirectory,
+            drop.ErrorDirectory,
+            gateway.Log
+                .Reverse()
+                .Select(e => new TransportLogDto(
+                    e.Direction.ToString(), e.TransactionSet, e.File, e.Summary, e.Ok, e.At))
+                .ToList()));
+    })
+    .WithName("GetTransport")
+    .WithSummary("The file-drop transport: which directories it is watching and what has moved.");
+
+app.MapGet("/api/tms", (MockTmsAdapter adapter, TmsBridge bridge) => new TmsStatus(
+        adapter.Name,
+        adapter.IsConnected,
+        MockTmsAdapter.NativeStatusCodes,
+        adapter.Held
+            .Select(l => new TmsHeldLoadDto(
+                l.TmsLoadId, l.ShipmentId, l.BoardLoadId, l.Scac, l.Origin, l.Destination,
+                l.StopCount, l.PushedAt))
+            .ToList(),
+        bridge.Log
+            .Reverse()
+            .Select(e => new TmsLogDto(e.Kind, e.ShipmentId, e.TmsLoadId, e.Summary, e.Ok, e.At))
+            .ToList()))
+    .WithName("GetTms")
+    .WithSummary("The TMS adapter boundary: what has been pushed across and what came back.");
+
+app.MapPost("/api/tms/callback",
+        async Task<Results<Ok<List<StatusEventDto>>, BadRequest<ProblemDetails>>> (
+            TmsCallbackRequest body,
+            MockTmsAdapter adapter,
+            LoadBoard board) =>
+        {
+            // Stands in for the webhook a real adapter would receive. The code arriving here
+            // is in the far system's vocabulary, and the adapter — not this endpoint and not
+            // the board — is what turns it into a board status.
+            bool applied = await adapter.RaiseStatusAsync(
+                body.ShipmentId,
+                body.Code,
+                body.OccurredAt ?? DateTime.Now,
+                body.City ?? string.Empty,
+                body.State ?? string.Empty,
+                body.Note ?? string.Empty);
+
+            if (!applied)
+            {
+                return TypedResults.BadRequest(Problem(
+                    "Callback not applied",
+                    $"Either load '{body.ShipmentId}' is not held by the adapter, or '{body.Code}' is not " +
+                    "a status code it knows. Valid codes: " +
+                    string.Join(", ", MockTmsAdapter.NativeStatusCodes) + "."));
+            }
+
+            Load? load = board.Loads.FirstOrDefault(l => l.ShipmentId == body.ShipmentId);
+
+            return TypedResults.Ok(
+                (load?.Events ?? new List<StatusEvent>()).Select(Contracts.ToEvent).ToList());
+        })
+    .WithName("TmsCallback")
+    .WithSummary("Raises a status callback from the mock TMS, as a webhook from a real one would.");
+
 // ---------------------------------------------------------------------------
 // Reference data and samples
 // ---------------------------------------------------------------------------
@@ -230,14 +390,16 @@ app.MapPost("/api/samples/{name}/tender",
 
             try
             {
-                IReadOnlyList<Load> loads = board.Tender(sample.Edi);
+                TenderReceipt receipt = board.Receive(sample.Edi);
                 X12Delimiters delimiters = X12Tokenizer.ReadDelimiters(sample.Edi);
 
                 return TypedResults.Ok(new TenderResult(
-                    loads.Select(Contracts.ToSummary).ToList(),
-                    loads[0].TenderDiagnostics,
+                    receipt.Loads.Select(Contracts.ToSummary).ToList(),
+                    receipt.Loads.Count > 0 ? receipt.Loads[0].TenderDiagnostics : Array.Empty<string>(),
                     X12Tokenizer.Tokenize(sample.Edi).Count,
-                    delimiters.ToString()));
+                    delimiters.ToString(),
+                    receipt.Loads.Count > 0 ? Contracts.ToAcknowledgment(receipt.Loads[0]) : null,
+                    receipt.Explanation));
             }
             catch (X12ParseException ex)
             {
@@ -247,8 +409,9 @@ app.MapPost("/api/samples/{name}/tender",
     .WithName("TenderSample")
     .WithSummary("Ingests one of the bundled samples.");
 
-app.MapPost("/api/board/reset", (LoadBoard board, SampleLibrary samples) =>
+app.MapPost("/api/board/reset", (LoadBoard board, SampleLibrary samples, MockTmsAdapter adapter) =>
     {
+        adapter.Clear();
         BoardSeeder.Seed(board, samples, DateTime.Now);
         return board.Loads.Select(Contracts.ToSummary).ToList();
     })

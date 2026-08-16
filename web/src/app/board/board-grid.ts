@@ -48,6 +48,12 @@ export class BoardGrid {
       actionTooltip: load.nextActionLabel
         ? `Send a 214 — ${load.nextActionLabel}`
         : '',
+      invoiceTooltip: load.hasInvoice
+        ? `${load.invoiceNumber} — ${load.invoiceTotal.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} on a 210 raised at delivery`
+        : '',
     })),
   );
 

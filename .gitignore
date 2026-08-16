@@ -43,6 +43,11 @@ yarn-error.log*
 # The Angular build writes into the API's wwwroot. It is a build output, not source.
 src/FreightDispatch.Api/wwwroot/
 
+# ------------------------------------------------------------------ file drop
+# The watched directories the file-drop transport creates and fills. Partner
+# traffic, not source, even when the partner is a person dragging a sample in.
+edi-drop/
+
 # ------------------------------------------------------------------------- IDE
 .idea/
 *.swp

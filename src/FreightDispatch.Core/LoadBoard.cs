@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using EdiX12.Core;
 using FreightDispatch.Core.Edi;
 using FreightDispatch.Core.Model;
+using FreightDispatch.Core.Transport;
 
 namespace FreightDispatch.Core;
 
@@ -16,62 +18,170 @@ namespace FreightDispatch.Core;
 /// <para>Everything the board does is additive. A status event is a statement about
 /// something that happened, and the correction for a wrong one is another 214, never an
 /// edit — which is why <see cref="Load.Events"/> only ever grows.</para>
+/// <para>The board owns the whole lifecycle, in EDI terms, and generates every document in
+/// it. Nothing else in the application writes X12:</para>
+/// <code>
+/// 204 in   →  Receive   →  997 out       within minutes, before anyone has looked at it
+///             board row
+///          →  Advance   →  214 out       one per status event
+///          →  Delivered →  210 out       the invoice, which is where the loop closes
+/// </code>
 /// </remarks>
 public sealed class LoadBoard
 {
+    private static readonly AsyncLocal<bool> _suppressed = new();
+
     private readonly ConcurrentDictionary<Guid, Load> _loads = new();
+    private readonly ConcurrentQueue<FunctionalAcknowledgment> _acknowledgments = new();
     private readonly ControlNumbers _controlNumbers;
     private readonly Edi214Writer _writer;
+    private readonly Edi997Writer _acknowledgmentWriter;
+    private readonly Edi210Writer _invoiceWriter;
     private readonly Func<DateTime> _clock;
 
     /// <summary>Creates a board.</summary>
     /// <param name="controlNumbers">
-    /// The outbound control number sequence. Shared across every load, because ISA13 is
-    /// unique per interchange and not per shipment.
+    /// The outbound control number sequence. Shared across every load and every transaction
+    /// set, because ISA13 is unique per interchange and not per shipment or per document
+    /// type. A separate counter per document type is a tempting mistake and produces two
+    /// interchanges with the same control number on the same day.
     /// </param>
     /// <param name="clock">
     /// Supplies "now" in local time, for the ISA and GS timestamps. Injected so tests can
     /// produce a byte-identical file twice.
     /// </param>
-    public LoadBoard(ControlNumbers? controlNumbers = null, Func<DateTime>? clock = null)
+    /// <param name="rates">The rate card the 210 prices against. Defaults to <see cref="InvoiceRates.Demo"/>.</param>
+    public LoadBoard(ControlNumbers? controlNumbers = null, Func<DateTime>? clock = null, InvoiceRates? rates = null)
     {
         _controlNumbers = controlNumbers ?? new ControlNumbers(4001);
         _clock = clock ?? (() => DateTime.Now);
         _writer = new Edi214Writer(_controlNumbers);
+        _acknowledgmentWriter = new Edi997Writer(_controlNumbers);
+        _invoiceWriter = new Edi210Writer(_controlNumbers, rates);
     }
+
+    /// <summary>
+    /// Raised for every interchange the board generates — 997, 214 and 210 alike.
+    /// </summary>
+    /// <remarks>
+    /// This is the board's only outward-facing seam and it is deliberately not an
+    /// <c>ITransport</c> reference. The board's job ends at "here is a file and here is who
+    /// it is for"; deciding whether that goes into a directory, over AS2 or nowhere at all
+    /// belongs to whatever subscribed. See <see cref="Transport.TransportGateway"/>.
+    /// </remarks>
+    public event EventHandler<OutboundDocument>? DocumentGenerated;
+
+    /// <summary>
+    /// Raised once for every load tender that lands on the board, however it arrived.
+    /// </summary>
+    /// <remarks>
+    /// The seam <see cref="Tms.TmsBridge"/> hangs off. A load reaching the board is a load
+    /// the customer's own system needs told about, and it should not matter whether it came
+    /// off the file drop or out of the paste box.
+    /// </remarks>
+    public event EventHandler<Load>? LoadTendered;
 
     /// <summary>Every load on the board, newest tender first.</summary>
     public IReadOnlyList<Load> Loads =>
         _loads.Values.OrderByDescending(l => l.ReceivedAt).ToList();
+
+    /// <summary>
+    /// Every 997 the board has sent, oldest first — including the ones for interchanges
+    /// that produced no loads at all, which are the interesting ones.
+    /// </summary>
+    public IReadOnlyList<FunctionalAcknowledgment> Acknowledgments => _acknowledgments.ToArray();
 
     /// <summary>Finds a load, or null.</summary>
     /// <param name="id">The board identifier.</param>
     public Load? Find(Guid id) => _loads.TryGetValue(id, out Load? load) ? load : null;
 
     /// <summary>
-    /// Ingests a 204 and puts every load tender in it on the board.
+    /// Receives an interchange: parses it, acknowledges it, and puts any load tenders in it
+    /// on the board.
     /// </summary>
+    /// <remarks>
+    /// <para>The 997 is generated whatever happens, which is the point of this method
+    /// existing beside <see cref="Tender"/>. A file containing no 204 at all, or a 204 whose
+    /// SE01 is wrong, still gets acknowledged — with a rejection naming the syntax error —
+    /// because a partner who hears nothing back assumes the file was fine and the truck is
+    /// coming.</para>
+    /// <para>The one case that produces no acknowledgment is text that could not be
+    /// tokenized, which throws. There is no sender to answer and no control number to quote,
+    /// and the correct response is a TA1 rather than a 997.</para>
+    /// </remarks>
     /// <param name="ediText">Raw X12 text beginning with ISA.</param>
-    /// <returns>The loads created.</returns>
-    /// <exception cref="EdiX12.Core.X12ParseException">The interchange is not readable.</exception>
-    /// <exception cref="InvalidOperationException">The interchange contained no 204 transaction sets.</exception>
-    public IReadOnlyList<Load> Tender(string ediText)
+    /// <returns>The loads created and the acknowledgment that was sent.</returns>
+    /// <exception cref="X12ParseException">The interchange is not readable at all.</exception>
+    public TenderReceipt Receive(string ediText)
     {
-        IReadOnlyList<Load> loads = Edi204Reader.Read(ediText);
+        Interchange interchange = X12Parser.Parse(ediText);
+        IReadOnlyList<Load> loads = Edi204Reader.Read(interchange, ediText);
 
-        if (loads.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "The interchange parsed, but it contains no 204 transaction sets. " +
-                "Check GS01 and ST01 — a 214 or a 990 will parse perfectly and still not be a load tender.");
-        }
+        FunctionalAcknowledgment acknowledgment = _acknowledgmentWriter.Write(interchange, _clock());
 
+        // A load whose transaction set the 997 rejected still goes on the board, and that is
+        // a decision rather than an oversight. A translator's job is to reject a defective
+        // document; a dispatch board's job is to move freight, and those two are not the
+        // same job. `samples/204-bad-se-count.edi` declares 21 segments where there are 22 —
+        // the partner is told so, in an AK5*R*4, within seconds — and meanwhile there is a
+        // real truck expected at a real dock tomorrow morning, tendered by a partner who
+        // will resend a corrected file at some point and would rather the load was covered
+        // when they do. Hiding the row would leave the dispatcher with nothing to work and
+        // no idea why.
+        //
+        // The row is flagged instead. See Load.TenderRejected, which the board shows on the
+        // grid, and which is the thing a real operation escalates on.
         foreach (Load load in loads)
         {
+            load.Acknowledgment = acknowledgment;
             _loads[load.Id] = load;
         }
 
-        return loads;
+        _acknowledgments.Enqueue(acknowledgment);
+
+        foreach (Load load in loads)
+        {
+            LoadTendered?.Invoke(this, load);
+        }
+
+        if (acknowledgment.Edi.Length > 0)
+        {
+            Emit(new OutboundDocument(
+                "997",
+                acknowledgment.InterchangeControlNumber,
+                acknowledgment.SentBy,
+                acknowledgment.SentTo,
+                acknowledgment.Edi,
+                loads.Count > 0 ? loads[0].Id : null,
+                loads.Count > 0 ? loads[0].ShipmentId : string.Empty,
+                DateTimeOffset.UtcNow));
+        }
+
+        return new TenderReceipt(loads, acknowledgment);
+    }
+
+    /// <summary>
+    /// Ingests a 204 and puts every load tender in it on the board.
+    /// </summary>
+    /// <remarks>
+    /// A thin wrapper over <see cref="Receive"/> for callers that only want the loads and
+    /// treat "no loads" as a failure — the paste box and the seeder. The 997 is still
+    /// generated and still sent.
+    /// </remarks>
+    /// <param name="ediText">Raw X12 text beginning with ISA.</param>
+    /// <returns>The loads created.</returns>
+    /// <exception cref="X12ParseException">The interchange is not readable.</exception>
+    /// <exception cref="InvalidOperationException">The interchange produced no usable load tenders.</exception>
+    public IReadOnlyList<Load> Tender(string ediText)
+    {
+        TenderReceipt receipt = Receive(ediText);
+
+        if (receipt.Loads.Count == 0)
+        {
+            throw new InvalidOperationException(receipt.Explanation);
+        }
+
+        return receipt.Loads;
     }
 
     /// <summary>
@@ -85,7 +195,15 @@ public sealed class LoadBoard
     /// Empties the board. The control number sequence deliberately does not reset with it:
     /// the loads are gone, but the partner has still seen those ISA13 values.
     /// </summary>
-    public void Clear() => _loads.Clear();
+    public void Clear()
+    {
+        _loads.Clear();
+
+        while (_acknowledgments.TryDequeue(out _))
+        {
+            // The acknowledgments go with the loads they were about.
+        }
+    }
 
     /// <summary>
     /// Advances a load to the next status and generates the 214 that reports it.
@@ -189,8 +307,84 @@ public sealed class LoadBoard
                 load.CurrentStopSequence = next.Sequence;
             }
 
+            // Delivered is the only status that generates a second document. The 214 says
+            // the freight arrived; the 210 asks to be paid for having taken it there, and
+            // the carrier is not entitled to send one until the D1 exists.
+            if (status == LoadStatus.Delivered && load.Invoice is null)
+            {
+                Invoice(load);
+            }
+
             return emitted;
         }
+    }
+
+    /// <summary>
+    /// Prices and invoices a delivered load, and sends the 210.
+    /// </summary>
+    /// <remarks>
+    /// Called from <see cref="Advance"/> under the load's own lock, so the invoice sees the
+    /// complete status history including the D1 that triggered it — which is where the 210
+    /// gets its delivery date from.
+    /// </remarks>
+    private void Invoice(Load load)
+    {
+        FreightInvoice invoice = _invoiceWriter.Write(load, _clock());
+        load.Invoice = invoice;
+
+        Emit(new OutboundDocument(
+            "210",
+            invoice.InterchangeControlNumber,
+            load.TenderedTo,
+            load.TenderedBy,
+            invoice.Edi,
+            load.Id,
+            load.ShipmentId,
+            DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// Runs an action with outbound sending suppressed.
+    /// </summary>
+    /// <remarks>
+    /// <para>For seeding. The demonstration board starts with twelve loads already part-way
+    /// through their runs, and every one of those status changes goes through the same
+    /// <see cref="Advance"/> the buttons do — which is the point, because it means the
+    /// reader and the writers are exercised on every process start. What it must not do is
+    /// put eighty interchanges into a partner's directory every time the process
+    /// restarts.</para>
+    /// <para>The flag is <see cref="AsyncLocal{T}"/> rather than a field because a reseed
+    /// can overlap with a dispatcher clicking a status on a load that is genuinely moving,
+    /// and suppressing that one would be a lost 214. Scoping it to the calling flow means
+    /// only the seeding is quiet.</para>
+    /// </remarks>
+    /// <param name="action">The work to do quietly.</param>
+    public void WithoutSending(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        bool previous = _suppressed.Value;
+        _suppressed.Value = true;
+
+        try
+        {
+            action();
+        }
+        finally
+        {
+            _suppressed.Value = previous;
+        }
+    }
+
+    /// <summary>Hands a generated interchange to whatever is listening, and never throws at the caller.</summary>
+    private void Emit(OutboundDocument document)
+    {
+        if (_suppressed.Value)
+        {
+            return;
+        }
+
+        DocumentGenerated?.Invoke(this, document);
     }
 
     /// <summary>Writes one 214 and records the event it reports.</summary>
@@ -241,6 +435,17 @@ public sealed class LoadBoard
         };
 
         load.Events.Add(statusEvent);
+
+        Emit(new OutboundDocument(
+            "214",
+            result.InterchangeControlNumber,
+            load.TenderedTo,
+            load.TenderedBy,
+            result.Edi,
+            load.Id,
+            load.ShipmentId,
+            statusEvent.RecordedAt));
+
         return statusEvent;
     }
 

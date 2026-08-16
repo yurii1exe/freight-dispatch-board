@@ -10,6 +10,13 @@
             @if (!load.summary.isProduction) {
               <span class="test" title="ISA15 is 'T'">TEST</span>
             }
+            @if (load.summary.tenderRejected) {
+              <span
+                class="rejected"
+                title="The 997 told the sender this tender was refused. The row stays because there is still a truck expected."
+                >997 REJECTED</span
+              >
+            }
           </div>
         </div>
         <span class="pill"><span class="dot"></span>{{ load.summary.statusLabel }}</span>
@@ -53,7 +60,9 @@
         </label>
       } @else {
         <div class="complete">
-          Delivered. Six status messages sent; the load is closed.
+          Delivered.
+          {{ load.events.length }} status message{{ load.events.length === 1 ? '' : 's' }} sent and
+          the 210 raised — the load is closed at the money.
           <button class="ghost tiny" (click)="remove.emit(load.summary.id)">Remove from board</button>
         </div>
       }
@@ -76,6 +85,49 @@
 
     <!-- --------------------------------------------------------------- body -->
     <div class="scroll">
+      <!-- functional acknowledgment -->
+      @if (acknowledgment(); as ack) {
+        <section class="block">
+          <div class="block-head">
+            <span class="eyebrow">Acknowledged</span>
+            <span class="dim">997 · {{ when(ack.generatedAt) }}</span>
+          </div>
+
+          <div class="ack" (click)="show('ack')" [class.bad]="ack.rejected">
+            <span class="verdict" [class]="'v-' + ack.transactionAcknowledgmentCode">
+              {{ ack.transactionAcknowledgmentCode }}
+            </span>
+            <div class="ack-body">
+              <b>{{ ack.transactionAcknowledgmentLabel }}</b>
+              <span class="dim">
+                AK1 acknowledges group {{ ack.acknowledgedInterchangeControlNumber }} ·
+                sent as ISA13 {{ ack.interchangeControlNumber }}
+              </span>
+            </div>
+          </div>
+
+          @if (ack.findings.length > 0) {
+            <ul class="findings">
+              @for (finding of ack.findings; track $index) {
+                <li class="mono">{{ finding }}</li>
+              }
+            </ul>
+          }
+
+          @if (ack.outOfScope.length > 0) {
+            <div class="scope">
+              <b>Not reportable in a 997.</b>
+              A 997 acknowledges functional groups; an interchange-level defect needs a TA1.
+              <ul>
+                @for (item of ack.outOfScope; track $index) {
+                  <li>{{ item }}</li>
+                }
+              </ul>
+            </div>
+          }
+        </section>
+      }
+
       <!-- stops -->
       <section class="block">
         <div class="block-head">
@@ -215,7 +267,7 @@
               <li
                 [class]="'st-' + event.status"
                 [class.active]="event.id === selectedEvent()?.id"
-                (click)="selectedEventId.set(event.id); pane.set('status')"
+                (click)="selectedEventId.set(event.id); show('status')"
               >
                 <span class="ev-code mono">{{ event.statusCode }}</span>
                 <span class="ev-body">
@@ -230,25 +282,92 @@
           </ul>
         }
       </section>
+
+      <!-- invoice -->
+      @if (invoice(); as bill) {
+        <section class="block">
+          <div class="block-head">
+            <span class="eyebrow">Invoiced</span>
+            <span class="dim">210 · {{ bill.invoiceNumber }} · net {{ bill.paymentTermsDays }}</span>
+          </div>
+
+          <table class="charges" (click)="show('invoice')">
+            <colgroup>
+              <col style="width: 20px" />
+              <col style="width: 40px" />
+              <col />
+              <col style="width: 62px" />
+              <col style="width: 82px" />
+            </colgroup>
+            <tbody>
+              @for (charge of bill.charges; track charge.lineNumber) {
+                <tr>
+                  <td class="mono dim">{{ charge.lineNumber }}</td>
+                  <td class="mono code" [title]="'L108 element 150 ' + charge.specialChargeCode">
+                    {{ charge.specialChargeCode }}
+                  </td>
+                  <td class="desc truncate">{{ charge.description }}</td>
+                  <td class="mono dim rate">
+                    @if (charge.rate !== null) {
+                      {{ charge.rate }} {{ charge.rateQualifier }}
+                    }
+                  </td>
+                  <td class="mono amount">{{ money(charge.amount) }}</td>
+                </tr>
+              }
+              <tr class="total">
+                <td></td>
+                <td></td>
+                <td class="desc" [title]="'B307 goes on the wire as ' + bill.totalCents + ' — N2, no decimal point'">
+                  Net amount due · B307
+                </td>
+                <td></td>
+                <td class="mono amount">{{ money(bill.total) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      }
     </div>
 
     <!-- ------------------------------------------------------------ edi pane -->
     <section class="wire">
       <div class="wire-head">
+        <!-- The lifecycle, left to right, in the order the documents happen. -->
         <div class="tabs">
-          <button class="tab" [class.on]="pane() === 'tender'" (click)="pane.set('tender')">
+          <button class="tab" [class.on]="pane() === 'tender'" (click)="show('tender')">
             204 in
           </button>
           <button
             class="tab"
+            [class.on]="pane() === 'ack'"
+            (click)="show('ack')"
+            [disabled]="!acknowledgment()"
+          >
+            997 out
+            @if (acknowledgment(); as ack) {
+              <span class="count" [class.bad]="ack.rejected">{{ ack.transactionAcknowledgmentCode }}</span>
+            }
+          </button>
+          <button
+            class="tab"
             [class.on]="pane() === 'status'"
-            (click)="pane.set('status')"
+            (click)="show('status')"
             [disabled]="events().length === 0"
           >
             214 out
             @if (events().length > 0) {
               <span class="count">{{ events().length }}</span>
             }
+          </button>
+          <button
+            class="tab"
+            [class.on]="pane() === 'invoice'"
+            (click)="show('invoice')"
+            [disabled]="!invoice()"
+            [title]="invoice() ? '' : 'Raised on delivery. There is nothing to bill for freight that has not moved.'"
+          >
+            210 out
           </button>
         </div>
 
@@ -259,6 +378,24 @@
             </span>
             <span class="dim">ISA13 {{ event.interchangeControlNumber }}</span>
             <span class="dim">ST02 {{ event.transactionControlNumber }}</span>
+          </div>
+        } @else if (pane() === 'ack' && acknowledgment(); as ack) {
+          <div class="wire-meta mono">
+            <span [class.ok]="ack.roundTripClean" [class.bad]="!ack.roundTripClean">
+              {{ ack.roundTripClean ? '✓ re-parsed clean' : '✗ ' + ack.roundTripDiagnostics.length + ' diagnostic(s)' }}
+            </span>
+            <span [class.ok]="!ack.rejected" [class.bad]="ack.rejected">
+              AK5 {{ ack.transactionAcknowledgmentCode }} · AK9 {{ ack.verdict }}
+            </span>
+            <span class="dim">ISA13 {{ ack.interchangeControlNumber }}</span>
+          </div>
+        } @else if (pane() === 'invoice' && invoice(); as bill) {
+          <div class="wire-meta mono">
+            <span [class.ok]="bill.roundTripClean" [class.bad]="!bill.roundTripClean">
+              {{ bill.roundTripClean ? '✓ re-parsed clean' : '✗ ' + bill.roundTripDiagnostics.length + ' diagnostic(s)' }}
+            </span>
+            <span class="dim">{{ bill.currencyCode }} {{ money(bill.total) }} as N2 {{ bill.totalCents }}</span>
+            <span class="dim">ISA13 {{ bill.interchangeControlNumber }}</span>
           </div>
         } @else if (pane() === 'tender') {
           <div class="wire-meta mono dim">{{ tenderMeta() }}</div>

@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { LoadDetail, StatusEventDto } from '../api/models';
 import { EdiView } from '../ui/edi-view';
@@ -10,7 +20,14 @@ export interface AdvanceCommand {
   note: string | null;
 }
 
-type Pane = 'tender' | 'status';
+/**
+ * The four documents of a load's life, in the order they happen.
+ *
+ * `ack` and `invoice` are the two ends. Before them the console showed only the middle of
+ * the lifecycle — the tender arriving and the statuses going back — which is the part that
+ * is easiest to build and the part a trading partner asks about last.
+ */
+type Pane = 'tender' | 'ack' | 'status' | 'invoice';
 
 /**
  * Everything about the selected load: the human view above, the wire format below.
@@ -27,6 +44,8 @@ type Pane = 'tender' | 'status';
   styleUrl: './load-detail.css',
 })
 export class LoadDetailPanel {
+  private readonly host = inject(ElementRef<HTMLElement>);
+
   readonly detail = input.required<LoadDetail | null>();
   readonly busy = input(false);
 
@@ -50,15 +69,39 @@ export class LoadDetailPanel {
     return chosen ?? all[0];
   });
 
-  readonly ediText = computed(() => {
-    if (this.pane() === 'tender') {
-      return this.detail()?.sourceEdi ?? '';
-    }
+  readonly acknowledgment = computed(() => this.detail()?.acknowledgment ?? null);
 
-    return this.selectedEvent()?.edi214 ?? '';
+  readonly invoice = computed(() => this.detail()?.invoice ?? null);
+
+  readonly ediText = computed(() => {
+    switch (this.pane()) {
+      case 'tender':
+        return this.detail()?.sourceEdi ?? '';
+      case 'ack':
+        return this.acknowledgment()?.edi ?? '';
+      case 'invoice':
+        return this.invoice()?.edi ?? '';
+      default:
+        return this.selectedEvent()?.edi214 ?? '';
+    }
   });
 
-  readonly ediHighlight = computed(() => (this.pane() === 'status' ? 'AT7' : 'S5'));
+  /**
+   * The segment worth pointing at in each document — the one carrying the thing the pane is
+   * about. `AK5` is the verdict, `L1` is the money, `AT7` is the status, `S5` is the stop.
+   */
+  readonly ediHighlight = computed(() => {
+    switch (this.pane()) {
+      case 'tender':
+        return 'S5';
+      case 'ack':
+        return 'AK5';
+      case 'invoice':
+        return 'L1';
+      default:
+        return 'AT7';
+    }
+  });
 
   /**
    * What the inbound file declared about itself, read the way a parser reads it: the
@@ -95,6 +138,29 @@ export class LoadDetailPanel {
     });
   }
 
+  /**
+   * Switches the wire pane and brings the matching part of the human view with it.
+   *
+   * The two halves of this panel are the same event seen from two sides, so moving one and
+   * leaving the other behind defeats the point — clicking "210 out" while the body is still
+   * showing stops means reading the invoice off the raw segments.
+   */
+  show(pane: Pane): void {
+    this.pane.set(pane);
+
+    const anchor = pane === 'ack' ? '.ack' : pane === 'invoice' ? '.charges' : null;
+    if (anchor === null) {
+      return;
+    }
+
+    // After the pane signal has been applied, so the block being scrolled to exists.
+    queueMicrotask(() =>
+      (this.host.nativeElement as HTMLElement)
+        .querySelector(anchor)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+    );
+  }
+
   send(): void {
     const detail = this.detail();
     if (!detail?.summary.nextStatus) {
@@ -122,5 +188,16 @@ export class LoadDetailPanel {
 
   lbs(value: number | null): string {
     return weight(value);
+  }
+
+  /**
+   * Money for reading, not for sending.
+   *
+   * The wire carries `265375` because L104 and B307 are N2 — an implied two decimal places
+   * and no decimal point. This is the only place the two forms are allowed to meet, and the
+   * EDI pane underneath shows what actually goes out.
+   */
+  money(value: number): string {
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 }

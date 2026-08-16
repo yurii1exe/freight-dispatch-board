@@ -5,7 +5,7 @@
       <span class="mark">204</span>
       <div>
         <div class="title">Freight Dispatch Board</div>
-        <div class="tag">load tender in · dispatch board · 214 status out</div>
+        <div class="tag">204 in · 997 back · dispatch board · 214 out · 210 at delivery</div>
       </div>
     </div>
 
@@ -76,9 +76,13 @@
       <div class="rail-foot">
         <div class="eyebrow">The loop</div>
         <p>
-          A 204 arrives and becomes a row. Every status change generates one 214 with an AT7
-          carrying the matching element 1650 code, which is parsed straight back to prove it
-          is readable.
+          A 204 arrives, is answered with a 997 before anyone looks at it, and becomes a row.
+          Every status change generates one 214 with an AT7 carrying the matching element
+          1650 code. Delivery raises the 210.
+        </p>
+        <p>
+          Every one of them is parsed straight back through the same library that read the
+          tender, to prove it is readable.
         </p>
         <p class="dim">
           Envelope parsing by <code>EdiX12.Core</code>. All data invented from the public

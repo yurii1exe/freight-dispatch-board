@@ -41,6 +41,12 @@ public sealed record LoadSummary(
     string BillOfLading,
     bool IsProduction,
     bool HasTenderDiagnostics,
+    string AcknowledgmentVerdict,
+    string AcknowledgmentLabel,
+    bool TenderRejected,
+    bool HasInvoice,
+    string InvoiceNumber,
+    decimal InvoiceTotal,
     int EventCount,
     DateTimeOffset ReceivedAt);
 
@@ -58,7 +64,116 @@ public sealed record LoadDetail(
     IReadOnlyList<StopDto> Stops,
     IReadOnlyList<StatusEventDto> Events,
     IReadOnlyList<string> TenderDiagnostics,
+    AcknowledgmentDto? Acknowledgment,
+    InvoiceDto? Invoice,
     string SourceEdi);
+
+/// <summary>The 997 that went back for this load's tender, and the generated file itself.</summary>
+public sealed record AcknowledgmentDto(
+    Guid Id,
+    string Verdict,
+    string VerdictLabel,
+    string TransactionAcknowledgmentCode,
+    string TransactionAcknowledgmentLabel,
+    bool Rejected,
+    string AcknowledgedInterchangeControlNumber,
+    string InterchangeControlNumber,
+    string TransactionControlNumber,
+    IReadOnlyList<string> Findings,
+    IReadOnlyList<string> OutOfScope,
+    IReadOnlyList<string> RoundTripDiagnostics,
+    bool RoundTripClean,
+    DateTime GeneratedAt,
+    string Edi);
+
+/// <summary>The 210 raised on delivery, its charge lines, and the generated file.</summary>
+public sealed record InvoiceDto(
+    Guid Id,
+    string InvoiceNumber,
+    DateTime InvoiceDate,
+    DateTime? ShippedOn,
+    DateTime? DeliveredOn,
+    IReadOnlyList<InvoiceChargeDto> Charges,
+    decimal Total,
+    long TotalCents,
+    decimal? TotalWeight,
+    decimal? TotalQuantity,
+    string CurrencyCode,
+    int PaymentTermsDays,
+    string InterchangeControlNumber,
+    string TransactionControlNumber,
+    IReadOnlyList<string> RoundTripDiagnostics,
+    bool RoundTripClean,
+    string Edi);
+
+/// <summary>One charge line on the invoice.</summary>
+public sealed record InvoiceChargeDto(
+    int LineNumber,
+    string Description,
+    string SpecialChargeCode,
+    decimal Amount,
+    long AmountCents,
+    decimal? Rate,
+    string RateQualifier,
+    decimal? Weight,
+    decimal? Quantity);
+
+/// <summary>What the transport is and what has recently moved over it.</summary>
+public sealed record TransportStatus(
+    string Name,
+    string Endpoint,
+    bool Running,
+    string InboundDirectory,
+    string OutboundDirectory,
+    string ProcessedDirectory,
+    string ErrorDirectory,
+    IReadOnlyList<TransportLogDto> Log);
+
+/// <summary>One line of the transport log.</summary>
+public sealed record TransportLogDto(
+    string Direction,
+    string TransactionSet,
+    string File,
+    string Summary,
+    bool Ok,
+    DateTimeOffset At);
+
+/// <summary>The TMS adapter, what it is holding, and what has crossed the boundary.</summary>
+public sealed record TmsStatus(
+    string Name,
+    bool Connected,
+    IReadOnlyList<string> NativeStatusCodes,
+    IReadOnlyList<TmsHeldLoadDto> Held,
+    IReadOnlyList<TmsLogDto> Log);
+
+/// <summary>A load the adapter is holding.</summary>
+public sealed record TmsHeldLoadDto(
+    string TmsLoadId,
+    string ShipmentId,
+    Guid BoardLoadId,
+    string Scac,
+    string Origin,
+    string Destination,
+    int StopCount,
+    DateTimeOffset PushedAt);
+
+/// <summary>One line of the TMS bridge log.</summary>
+public sealed record TmsLogDto(
+    string Kind,
+    string ShipmentId,
+    string TmsLoadId,
+    string Summary,
+    bool Ok,
+    DateTimeOffset At);
+
+/// <summary>Request body for a simulated TMS status callback.</summary>
+public sealed record TmsCallbackRequest(
+    string ShipmentId,
+    string Code,
+    DateTime? OccurredAt,
+    string? City,
+    string? State,
+    string? Note);
 
 /// <summary>A stop on the detail panel.</summary>
 public sealed record StopDto(
@@ -125,12 +240,14 @@ public sealed record StatusEventDto(
     IReadOnlyList<string> RoundTripDiagnostics,
     bool RoundTripClean);
 
-/// <summary>The result of ingesting a 204.</summary>
+/// <summary>The result of ingesting a 204, including the 997 that went straight back out.</summary>
 public sealed record TenderResult(
     IReadOnlyList<LoadSummary> Loads,
     IReadOnlyList<string> Diagnostics,
     int SegmentCount,
-    string Delimiters);
+    string Delimiters,
+    AcknowledgmentDto? Acknowledgment,
+    string Explanation);
 
 /// <summary>A bundled sample tender.</summary>
 public sealed record SampleTender(string Name, string Title, string Description, string Edi);
@@ -199,6 +316,12 @@ public static class Contracts
             FindReference(load, "BM") ?? string.Empty,
             load.IsProduction,
             load.TenderDiagnostics.Count > 0,
+            load.Acknowledgment?.Verdict ?? string.Empty,
+            load.Acknowledgment?.VerdictLabel ?? string.Empty,
+            load.TenderRejected,
+            load.Invoice is not null,
+            load.Invoice?.InvoiceNumber ?? string.Empty,
+            load.Invoice?.Total ?? 0m,
             load.Events.Count,
             load.ReceivedAt);
     }
@@ -218,7 +341,71 @@ public static class Contracts
         load.Stops.Select(stop => ToStop(stop, load)).ToList(),
         load.Events.Select(ToEvent).ToList(),
         load.TenderDiagnostics,
+        ToAcknowledgment(load),
+        ToInvoice(load.Invoice),
         load.SourceEdi);
+
+    /// <summary>Projects the 997 that answered this load's tender.</summary>
+    /// <param name="load">The load.</param>
+    public static AcknowledgmentDto? ToAcknowledgment(Load load)
+    {
+        if (load.Acknowledgment is not { } ack)
+        {
+            return null;
+        }
+
+        AcknowledgedTransactionSet? mine = load.TenderAcknowledgment;
+
+        return new AcknowledgmentDto(
+            ack.Id,
+            ack.Verdict,
+            ack.VerdictLabel,
+            mine?.AcknowledgmentCode ?? ack.Verdict,
+            mine?.AcknowledgmentLabel ?? ack.VerdictLabel,
+            load.TenderRejected,
+            ack.AcknowledgedInterchangeControlNumber,
+            ack.InterchangeControlNumber,
+            ack.TransactionControlNumber,
+            ack.Findings,
+            ack.OutOfScope,
+            ack.RoundTripDiagnostics,
+            ack.RoundTripClean,
+            ack.GeneratedAt,
+            ack.Edi);
+    }
+
+    /// <summary>Projects the 210, or null when the load has not delivered.</summary>
+    /// <param name="invoice">The invoice.</param>
+    public static InvoiceDto? ToInvoice(FreightInvoice? invoice) =>
+        invoice is null
+            ? null
+            : new InvoiceDto(
+                invoice.Id,
+                invoice.InvoiceNumber,
+                invoice.InvoiceDate,
+                invoice.ShippedOn,
+                invoice.DeliveredOn,
+                invoice.Charges.Select(c => new InvoiceChargeDto(
+                    c.LineNumber,
+                    c.Description,
+                    c.SpecialChargeCode,
+                    c.Amount,
+                    c.AmountCents,
+                    c.Rate,
+                    c.RateQualifier,
+                    c.Weight,
+                    c.Quantity)).ToList(),
+                invoice.Total,
+                invoice.TotalCents,
+                invoice.TotalWeight,
+                invoice.TotalQuantity,
+                invoice.CurrencyCode,
+                invoice.PaymentTermsDays,
+                invoice.InterchangeControlNumber,
+                invoice.TransactionControlNumber,
+                invoice.RoundTripDiagnostics,
+                invoice.RoundTripClean,
+                invoice.Edi);
 
     /// <summary>
     /// Projects a stop, marked with where the truck is relative to it.
