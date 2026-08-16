@@ -1,0 +1,124 @@
+<div class="grid-wrap">
+  <table class="grid">
+    <colgroup>
+      <col style="width: 5px" />
+      <col style="width: 108px" />
+      <col style="width: 104px" />
+      <col style="width: 96px" />
+      <col />
+      <col style="width: 100px" />
+      <col />
+      <col style="width: 100px" />
+      <col style="width: 40px" />
+      <col style="width: 72px" />
+      <col style="width: 100px" />
+      <col style="width: 44px" />
+      <col style="width: 128px" />
+    </colgroup>
+
+    <thead>
+      <tr>
+        <th></th>
+        <th>Load</th>
+        <th>Status</th>
+        <th>Equipment</th>
+        <th>Shipper</th>
+        <th>Pickup</th>
+        <th>Consignee</th>
+        <th>Delivery</th>
+        <th class="c">Stp</th>
+        <th class="r">Weight</th>
+        <th>BOL</th>
+        <th class="c">214</th>
+        <th></th>
+      </tr>
+    </thead>
+
+    <tbody>
+      @for (row of rows(); track row.load.id) {
+        <tr
+          class="row"
+          [class]="'st-' + row.load.status"
+          [class.selected]="row.load.id === selectedId()"
+          (click)="selectLoad.emit(row.load.id)"
+        >
+          <td class="bar"></td>
+
+          <td class="mono load-no">
+            {{ row.load.shipmentId }}
+            <span class="sub dim">{{ row.load.scac }}</span>
+          </td>
+
+          <td>
+            <span class="pill"><span class="dot"></span>{{ row.load.statusLabel }}</span>
+          </td>
+
+          <td>
+            {{ row.equipment }}
+            @if (row.load.temperatureControl) {
+              <span class="sub temp">{{ row.load.temperatureControl }}</span>
+            } @else if (row.load.trailerNumber) {
+              <span class="sub dim mono">{{ row.load.trailerNumber }}</span>
+            }
+          </td>
+
+          <td class="place">
+            <span class="truncate">{{ row.load.originName }}</span>
+            <span class="sub muted">{{ row.load.originCityState }}</span>
+          </td>
+
+          <td class="when" [class.late]="row.pickupLate">
+            <span>{{ row.pickupDate }}</span>
+            <span class="sub mono">{{ row.pickupWindow }}</span>
+          </td>
+
+          <td class="place">
+            <span class="truncate">{{ row.load.destinationName }}</span>
+            <span class="sub muted">{{ row.load.destinationCityState }}</span>
+          </td>
+
+          <td class="when" [class.late]="row.deliveryLate">
+            <span>{{ row.deliveryDate }}</span>
+            <span class="sub mono">{{ row.deliveryWindow }}</span>
+          </td>
+
+          <td class="c mono">
+            {{ row.load.stopCount }}
+            @if (row.load.extraStops > 0) {
+              <span class="multi" title="More than a straight pickup and drop">+</span>
+            }
+          </td>
+
+          <td class="r mono">{{ row.weight }}</td>
+
+          <td class="mono truncate">{{ row.load.billOfLading }}</td>
+
+          <td class="c mono dim">{{ row.load.eventCount || '—' }}</td>
+
+          <td class="act">
+            @if (row.load.hasTenderDiagnostics) {
+              <span class="flag" title="The inbound 204 has envelope diagnostics">EDI</span>
+            }
+            @if (row.load.nextStatus) {
+              <button
+                class="tiny"
+                (click)="advanceLoad.emit(row.load); $event.stopPropagation()"
+                [title]="'Send a 214 and move to ' + row.load.nextStatusLabel"
+              >
+                {{ row.load.nextStatusLabel }} →
+              </button>
+            } @else {
+              <span class="done">complete</span>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="13" class="empty">
+            No loads on the board. Tender a 204 to put one here.
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

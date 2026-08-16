@@ -1,0 +1,61 @@
+<div class="backdrop" (click)="close.emit()"></div>
+
+<div class="dialog panel" (click)="$event.stopPropagation()">
+  <div class="section-head">
+    <div>
+      <b>Tender a 204</b>
+      <span class="dim"> — Motor Carrier Load Tender</span>
+    </div>
+    <button class="ghost tiny" (click)="close.emit()">Close</button>
+  </div>
+
+  <div class="body">
+    <div
+      class="drop"
+      [class.over]="dragging()"
+      (dragover)="$event.preventDefault(); dragging.set(true)"
+      (dragleave)="dragging.set(false)"
+      (drop)="onDrop($event)"
+    >
+      <textarea
+        rows="12"
+        spellcheck="false"
+        placeholder="ISA*00*          *00*          *ZZ*…&#10;&#10;Paste an interchange, or drop a file here."
+        [ngModel]="text()"
+        (ngModelChange)="text.set($event)"
+      ></textarea>
+      <div class="drop-hint">drop a .edi / .x12 / .txt file anywhere in this box</div>
+    </div>
+
+    <div class="row">
+      <label class="file">
+        <input type="file" accept=".edi,.x12,.txt,text/plain" (change)="onFileInput($event)" />
+        <span>Choose a file…</span>
+      </label>
+      <span class="spacer"></span>
+      <button class="ghost tiny" (click)="text.set('')" [disabled]="!text()">Clear</button>
+      <button class="primary" (click)="send()" [disabled]="busy() || !text().trim()">
+        Ingest tender
+      </button>
+    </div>
+
+    @if (error()) {
+      <div class="banner bad">{{ error() }}</div>
+    }
+
+    <div class="samples">
+      <div class="eyebrow">Or one of the bundled samples</div>
+      <p class="dim">
+        Invented from the published X12 specification. Fictional shippers, fictional SCACs,
+        fictional reference numbers.
+      </p>
+
+      @for (sample of samples(); track sample.name) {
+        <button class="sample" (click)="pick.emit(sample.name)" [disabled]="busy()">
+          <b>{{ sample.title }}</b>
+          <span class="dim">{{ sample.description }}</span>
+        </button>
+      }
+    </div>
+  </div>
+</div>

@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------- working notes
+# Not a repo artifact. References positioning and employer context.
+PORTFOLIO-PLAN.md
+
+# ------------------------------------------------------------------------- .NET
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+*.binlog
+.vs/
+.vscode/
+!.vscode/extensions.json
+project.lock.json
+project.fragment.lock.json
+*.nupkg
+*.snupkg
+BenchmarkDotNet.Artifacts/
+TestResults/
+[Cc]overage*/
+*.coverage
+*.coveragexml
+*.trx
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+# --------------------------------------------------------------------- Angular
+node_modules/
+.angular/
+web/dist/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# The Angular build writes into the API's wwwroot. It is a build output, not source.
+src/FreightDispatch.Api/wwwroot/
+
+# ------------------------------------------------------------------------- IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --------------------------------------------------------------------- secrets
+# Nothing in this project needs a credential, and nothing should start to without
+# the file that carries it being listed here first.
+appsettings.*.local.json
+*.pfx
+*.p12
+.env
+.env.*
+!.env.example
+secrets.json

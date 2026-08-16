@@ -1,0 +1,20 @@
+# Normalise text on commit, check out with native endings.
+* text=auto
+
+# EDI files are byte-exact by definition. The segment terminator is declared at ISA
+# offset 105 and in samples/204-flatbed-pipe-delimited.edi that character IS the newline,
+# so line-ending normalisation would change what the terminator is and the file would no
+# longer be the thing it is a sample of.
+*.edi binary
+*.x12 binary
+
+*.cs      text diff=csharp
+*.csproj  text
+*.sln     text eol=crlf
+*.props   text
+*.ts      text
+*.html    text
+*.css     text
+*.json    text
+*.md      text
+*.png     binary

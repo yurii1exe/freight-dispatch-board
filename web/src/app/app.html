@@ -1,0 +1,121 @@
+<div class="shell">
+  <!-- ------------------------------------------------------------- top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark">204</span>
+      <div>
+        <div class="title">Freight Dispatch Board</div>
+        <div class="tag">load tender in · dispatch board · 214 status out</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div><b class="mono">{{ board.loads().length }}</b><span class="eyebrow">on board</span></div>
+      <div><b class="mono">{{ needingCover() }}</b><span class="eyebrow">to cover</span></div>
+      <div><b class="mono">{{ inMotion() }}</b><span class="eyebrow">in motion</span></div>
+      <div><b class="mono">{{ messagesSent() }}</b><span class="eyebrow">214s sent</span></div>
+    </div>
+
+    <div class="tools">
+      <input
+        class="search"
+        type="search"
+        placeholder="load, BOL, trailer, city…"
+        [ngModel]="query()"
+        (ngModelChange)="query.set($event)"
+      />
+      <button class="primary" (click)="tenderOpen.set(true)">Tender a 204</button>
+      <button class="ghost" (click)="board.reset()" [disabled]="board.busy()" title="Clear and reseed">
+        Reset
+      </button>
+    </div>
+  </header>
+
+  @if (board.error()) {
+    <div class="error-strip">
+      <b>{{ board.error() }}</b>
+      <button class="ghost tiny" (click)="board.error.set(null)">dismiss</button>
+    </div>
+  }
+
+  <!-- ---------------------------------------------------------------- body -->
+  <div class="body">
+    <!-- filter rail -->
+    <aside class="rail">
+      <div class="rail-head eyebrow">Status</div>
+
+      <button
+        class="rail-item all"
+        [class.on]="statusFilter() === null"
+        (click)="statusFilter.set(null)"
+      >
+        <span>All loads</span>
+        <span class="mono">{{ board.loads().length }}</span>
+      </button>
+
+      @for (status of board.statuses(); track status.key) {
+        <button
+          class="rail-item"
+          [class]="'st-' + status.key"
+          [class.on]="statusFilter() === status.key"
+          (click)="toggleStatus(status.key)"
+        >
+          <span class="dot"></span>
+          <span class="label">{{ status.label }}</span>
+          @if (status.statusCode) {
+            <span class="code mono" [title]="'X12 element 1650 — ' + status.statusCodeName">
+              {{ status.statusCode }}
+            </span>
+          } @else {
+            <span class="code mono dim">—</span>
+          }
+          <span class="n mono">{{ counts().get(status.key) ?? 0 }}</span>
+        </button>
+      }
+
+      <div class="rail-foot">
+        <div class="eyebrow">The loop</div>
+        <p>
+          A 204 arrives and becomes a row. Every status change generates one 214 with an AT7
+          carrying the matching element 1650 code, which is parsed straight back to prove it
+          is readable.
+        </p>
+        <p class="dim">
+          Envelope parsing by <code>EdiX12.Core</code>. All data invented from the public
+          specification.
+        </p>
+      </div>
+    </aside>
+
+    <!-- grid -->
+    <main class="main">
+      <app-board-grid
+        [loads]="visible()"
+        [selectedId]="board.selectedId()"
+        (selectLoad)="board.select($event)"
+        (advanceLoad)="advanceFromGrid($event)"
+      />
+    </main>
+
+    <!-- detail -->
+    <section class="side">
+      <app-load-detail
+        [detail]="board.detail()"
+        [busy]="board.busy()"
+        (advance)="advanceFromDetail($event)"
+        (remove)="board.remove($event)"
+      />
+    </section>
+  </div>
+</div>
+
+@if (tenderOpen()) {
+  <app-tender-dialog
+    [samples]="board.samples()"
+    [busy]="board.busy()"
+    [error]="board.error()"
+    (submit)="tender($event)"
+    (pick)="tenderSample($event)"
+    (close)="tenderOpen.set(false)"
+  />
+}

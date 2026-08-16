@@ -1,0 +1,257 @@
+@if (detail(); as load) {
+  <div class="detail" [class]="'st-' + load.summary.status">
+    <!-- ------------------------------------------------------------- header -->
+    <header class="head">
+      <div class="head-top">
+        <div>
+          <div class="shipment mono">{{ load.summary.shipmentId }}</div>
+          <div class="sub muted">
+            {{ load.tenderedBy }} → {{ load.tenderedTo }}
+            @if (!load.summary.isProduction) {
+              <span class="test" title="ISA15 is 'T'">TEST</span>
+            }
+          </div>
+        </div>
+        <span class="pill"><span class="dot"></span>{{ load.summary.statusLabel }}</span>
+      </div>
+
+      <div class="facts">
+        <div><span class="eyebrow">Carrier</span><b class="mono">{{ load.summary.scac }}</b></div>
+        <div>
+          <span class="eyebrow">Equipment</span>
+          <b>
+            {{ load.summary.equipmentLabel }}
+            @if (load.summary.equipmentLength) {
+              <span class="mono">{{ load.summary.equipmentLength }}'</span>
+            }
+          </b>
+        </div>
+        <div><span class="eyebrow">Weight</span><b class="mono">{{ lbs(load.summary.totalWeight) }} lb</b></div>
+        <div><span class="eyebrow">Terms</span><b>{{ load.paymentMethodLabel }}</b></div>
+        @if (load.summary.temperatureControl) {
+          <div><span class="eyebrow">Temp</span><b class="mono temp">{{ load.summary.temperatureControl }}</b></div>
+        }
+        @if (load.summary.trailerNumber) {
+          <div><span class="eyebrow">Trailer</span><b class="mono">{{ load.summary.trailerNumber }}</b></div>
+        }
+      </div>
+    </header>
+
+    <!-- --------------------------------------------------------- status form -->
+    <section class="advance">
+      @if (load.summary.nextStatus) {
+        <button class="primary" (click)="send()" [disabled]="busy()">
+          Send 214 → {{ load.summary.nextStatusLabel }}
+        </button>
+        <label class="field">
+          <span class="eyebrow">Happened at</span>
+          <input type="datetime-local" [ngModel]="occurredAt()" (ngModelChange)="occurredAt.set($event)" />
+        </label>
+        <label class="field grow">
+          <span class="eyebrow">Note — stays on the board, not sent</span>
+          <input type="text" placeholder="driver, phone, delay reason…" [ngModel]="note()" (ngModelChange)="note.set($event)" />
+        </label>
+      } @else {
+        <div class="complete">
+          Delivered. Six status messages sent; the load is closed.
+          <button class="ghost tiny" (click)="remove.emit(load.summary.id)">Remove from board</button>
+        </div>
+      }
+    </section>
+
+    @if (load.tenderDiagnostics.length > 0) {
+      <div class="diag banner warn">
+        <div>
+          <b>The inbound 204 has {{ load.tenderDiagnostics.length }} envelope diagnostic(s).</b>
+          The tender is still usable — the truck still has to be dispatched — but this is
+          what would be quoted back at the sender.
+          <ul>
+            @for (message of load.tenderDiagnostics; track $index) {
+              <li class="mono">{{ message }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- --------------------------------------------------------------- body -->
+    <div class="scroll">
+      <!-- stops -->
+      <section class="block">
+        <div class="block-head">
+          <span class="eyebrow">Stops</span>
+          <span class="dim">{{ load.stops.length }} · S5 loop</span>
+        </div>
+
+        <ol class="stops">
+          @for (stop of load.stops; track stop.sequence) {
+            <li [class.pickup]="stop.isPickup">
+              <div class="seq">{{ stop.sequence }}</div>
+              <div class="stop-body">
+                <div class="stop-top">
+                  <b class="truncate">{{ stop.location.name }}</b>
+                  <span class="code-chip" [title]="'S502 ' + stop.reasonCode">{{ stop.reasonName }}</span>
+                </div>
+                <div class="muted">
+                  {{ stop.location.address1 }}@if (stop.location.address2) {, {{ stop.location.address2 }}}
+                </div>
+                <div class="muted mono">
+                  {{ stop.location.cityState }} {{ stop.location.postalCode }}
+                </div>
+
+                <div class="stop-line">
+                  <span class="eyebrow">{{ stop.isPickup ? 'Pickup' : 'Delivery' }}</span>
+                  @if (stop.earliest || stop.latest) {
+                    <span class="mono when">
+                      {{ date(stop.earliest) }}
+                      {{ time(stop.earliest) }}@if (stop.latest) {–{{ time(stop.latest) }}}
+                      <span class="dim">{{ stop.timeCode }}</span>
+                    </span>
+                    @if (stop.isAppointment) {
+                      <span class="code-chip">appt</span>
+                    } @else {
+                      <span class="code-chip">open end</span>
+                    }
+                  } @else {
+                    <span class="dim">no G62 on this stop</span>
+                  }
+                </div>
+
+                @if (stop.weight || stop.units) {
+                  <div class="stop-line">
+                    <span class="eyebrow">Freight</span>
+                    <span class="mono">
+                      @if (stop.weight) {{{ lbs(stop.weight) }} {{ stop.weightUnit === 'K' ? 'kg' : 'lb' }}}<span class="sep">@if (stop.weight && stop.units) {·}</span>@if (stop.units) {{{ stop.units }} {{ stop.unitOfMeasure }}}
+                    </span>
+                  </div>
+                }
+
+                @for (commodity of stop.commodities; track $index) {
+                  <div class="commodity">{{ commodity }}</div>
+                }
+
+                @if (stop.location.contactName) {
+                  <div class="stop-line">
+                    <span class="eyebrow">Contact</span>
+                    <span>{{ stop.location.contactName }}</span>
+                    <span class="mono dim">{{ stop.location.contactPhone }}</span>
+                  </div>
+                }
+
+                @if (stop.references.length > 0) {
+                  <div class="refs">
+                    @for (reference of stop.references; track $index) {
+                      <span class="ref" [title]="'L1102 ' + reference.qualifier">
+                        <span class="dim">{{ reference.qualifierName }}</span>
+                        <span class="mono">{{ reference.value }}</span>
+                      </span>
+                    }
+                  </div>
+                }
+
+                @for (note of stop.notes; track $index) {
+                  <div class="note">{{ note }}</div>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+      </section>
+
+      <!-- references and notes -->
+      @if (load.references.length > 0 || load.notes.length > 0) {
+        <section class="block">
+          <div class="block-head">
+            <span class="eyebrow">Load references</span>
+            <span class="dim">L11 · header</span>
+          </div>
+
+          <div class="refs wide">
+            @for (reference of load.references; track $index) {
+              <span class="ref" [title]="'L1102 ' + reference.qualifier">
+                <span class="dim">{{ reference.qualifierName }}</span>
+                <span class="mono">{{ reference.value }}</span>
+              </span>
+            }
+          </div>
+
+          @for (note of load.notes; track $index) {
+            <div class="note">{{ note }}</div>
+          }
+        </section>
+      }
+
+      <!-- status history -->
+      <section class="block">
+        <div class="block-head">
+          <span class="eyebrow">Status messages sent</span>
+          <span class="dim">{{ load.events.length }} × 214</span>
+        </div>
+
+        @if (events().length === 0) {
+          <div class="none">Nothing sent yet. The tender has not been acted on.</div>
+        } @else {
+          <ul class="events">
+            @for (event of events(); track event.id) {
+              <li
+                [class]="'st-' + event.status"
+                [class.active]="event.id === selectedEvent()?.id"
+                (click)="selectedEventId.set(event.id); pane.set('status')"
+              >
+                <span class="ev-code mono">{{ event.statusCode }}</span>
+                <span class="ev-body">
+                  <b>{{ event.statusLabel }}</b>
+                  <span class="dim">{{ event.statusCodeName }}</span>
+                </span>
+                <span class="ev-when mono">{{ when(event.occurredAt) }}</span>
+                <span class="ev-loc mono dim truncate">{{ event.cityState }}</span>
+                <span class="ev-isa mono dim">{{ event.interchangeControlNumber }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+
+    <!-- ------------------------------------------------------------ edi pane -->
+    <section class="wire">
+      <div class="wire-head">
+        <div class="tabs">
+          <button class="tab" [class.on]="pane() === 'tender'" (click)="pane.set('tender')">
+            204 in
+          </button>
+          <button
+            class="tab"
+            [class.on]="pane() === 'status'"
+            (click)="pane.set('status')"
+            [disabled]="events().length === 0"
+          >
+            214 out
+            @if (events().length > 0) {
+              <span class="count">{{ events().length }}</span>
+            }
+          </button>
+        </div>
+
+        @if (pane() === 'status' && selectedEvent(); as event) {
+          <div class="wire-meta mono">
+            <span [class.ok]="event.roundTripClean" [class.bad]="!event.roundTripClean">
+              {{ event.roundTripClean ? '✓ re-parsed clean' : '✗ ' + event.roundTripDiagnostics.length + ' diagnostic(s)' }}
+            </span>
+            <span class="dim">ISA13 {{ event.interchangeControlNumber }}</span>
+            <span class="dim">ST02 {{ event.transactionControlNumber }}</span>
+          </div>
+        } @else if (pane() === 'tender') {
+          <div class="wire-meta mono dim">{{ tenderMeta() }}</div>
+        }
+      </div>
+
+      <app-edi-view class="wire-body" [edi]="ediText()" [highlight]="ediHighlight()" />
+    </section>
+  </div>
+} @else {
+  <div class="nothing">
+    <div>Select a load.</div>
+    <div class="dim">The 204 it arrived on and every 214 sent about it show up here.</div>
+  </div>
+}

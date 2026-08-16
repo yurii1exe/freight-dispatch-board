@@ -1,0 +1,426 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.detail,
+.nothing {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.nothing {
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--st) 9%, var(--panel-2)),
+    var(--panel-2) 55%
+  );
+}
+
+.head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.shipment {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+
+.sub {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.test {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffd08a;
+  border: 1px solid rgba(255, 176, 32, 0.4);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 9px;
+}
+
+.facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.facts b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.temp {
+  color: #7dd3fc;
+}
+
+/* -------------------------------------------------------------- advance */
+
+.advance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* The note is the least urgent control, so it is the one that wraps to its own line
+   when the panel is narrow rather than squeezing the two that matter. */
+.field.grow {
+  flex: 1 1 240px;
+}
+
+.field input {
+  width: 100%;
+}
+
+.complete {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.diag {
+  margin: 9px 12px 0;
+}
+
+.diag ul {
+  margin: 5px 0 0;
+  padding-left: 15px;
+}
+
+.diag li {
+  font-size: 10.5px;
+  margin-bottom: 2px;
+}
+
+/* ----------------------------------------------------------------- body */
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 10px;
+}
+
+.block {
+  padding-top: 12px;
+}
+
+.block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 5px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 10.5px;
+}
+
+/* stops */
+
+.stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stops li {
+  position: relative;
+  display: flex;
+  gap: 9px;
+  padding-bottom: 12px;
+}
+
+.stops li::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 20px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.stops li:last-child::before {
+  display: none;
+}
+
+.seq {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  z-index: 1;
+}
+
+.stops li.pickup .seq {
+  color: #cfe6ff;
+  background: #17324f;
+  border-color: #27527e;
+}
+
+.stop-body {
+  min-width: 0;
+  flex: 1;
+  font-size: 11.5px;
+}
+
+.stop-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 1px;
+}
+
+.stop-top b {
+  font-size: 12.5px;
+  color: var(--text-strong);
+}
+
+.stop-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.stop-line .when {
+  color: var(--text-strong);
+}
+
+.stop-line .when .dim {
+  margin-left: 4px;
+}
+
+.stop-line .sep {
+  color: var(--muted-2);
+  margin: 0 2px;
+}
+
+.commodity {
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.note {
+  margin-top: 5px;
+  padding: 4px 7px;
+  border-radius: 2px;
+  background: rgba(255, 176, 32, 0.06);
+  border-left: 2px solid rgba(255, 176, 32, 0.45);
+  color: #d9c49c;
+  font-size: 11px;
+}
+
+.refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ref {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: #131c26;
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.ref .dim {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* events */
+
+.none {
+  color: var(--muted-2);
+  font-style: italic;
+  font-size: 11.5px;
+}
+
+.events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.events li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 104px 96px 70px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 2px;
+  border-left: 2px solid var(--st);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.events li:hover {
+  background: #141d27;
+}
+
+.events li.active {
+  background: #16243a;
+}
+
+.ev-code {
+  font-weight: 700;
+  color: var(--st);
+}
+
+.ev-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ev-body b {
+  font-size: 11.5px;
+  color: var(--text-strong);
+}
+
+.ev-body .dim {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ev-when {
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------- edi pane */
+
+.wire {
+  flex: none;
+  height: 258px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.wire-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 6px;
+}
+
+.tabs {
+  display: flex;
+  gap: 3px;
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+}
+
+.tab.on {
+  color: var(--text-strong);
+  background: #0a0e13;
+  border-color: var(--line);
+}
+
+.count {
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 7px;
+  font-size: 9.5px;
+  background: var(--line);
+  color: var(--muted);
+}
+
+.wire-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.wire-meta .ok {
+  color: var(--good);
+}
+
+.wire-meta .bad {
+  color: var(--bad);
+}
+
+.wire-body {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  padding: 0 8px 8px;
+}

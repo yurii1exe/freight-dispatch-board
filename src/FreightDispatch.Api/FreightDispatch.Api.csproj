@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The API is documented in docs/api.md and by the endpoint summaries; XML docs on
+         top-level statements in Program.cs would be noise, and CS1591 on a web project
+         with no public surface is not a warning worth honouring. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreightDispatch.Core\FreightDispatch.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The sample tenders ship with the API so the board has something to load on a
+         clean checkout. They are invented; see samples/README.md. -->
+    <Content Include="..\..\samples\*.edi" LinkBase="samples" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

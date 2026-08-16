@@ -1,0 +1,172 @@
+:host {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+.grid-wrap {
+  height: 100%;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.grid {
+  width: 100%;
+  min-width: 1140px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+thead th.c {
+  text-align: center;
+}
+
+thead th.r {
+  text-align: right;
+}
+
+tbody tr.row {
+  height: var(--row-h);
+  cursor: pointer;
+}
+
+tbody tr.row > td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 3px 8px;
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+tbody tr.row:hover > td {
+  background: #141d27;
+}
+
+tbody tr.row.selected > td {
+  background: #16243a;
+}
+
+tbody tr.row.selected > td:first-child {
+  background: var(--st);
+}
+
+td.bar {
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--st) 55%, transparent);
+}
+
+.sub {
+  display: block;
+  font-size: 10.5px;
+  line-height: 1.25;
+  margin-top: 1px;
+}
+
+.load-no {
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+
+.place {
+  min-width: 0;
+}
+
+.place > span:first-child {
+  display: block;
+  font-size: 12px;
+}
+
+.when {
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.when .sub {
+  color: var(--muted);
+}
+
+.when.late {
+  color: var(--warn);
+}
+
+.when.late .sub {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.temp {
+  color: #7dd3fc;
+  font-family: var(--mono);
+}
+
+.multi {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.c {
+  text-align: center;
+}
+
+.r {
+  text-align: right;
+}
+
+td.act {
+  text-align: right;
+  white-space: nowrap;
+}
+
+td.act button {
+  visibility: hidden;
+}
+
+tbody tr.row:hover td.act button,
+tbody tr.row.selected td.act button {
+  visibility: visible;
+}
+
+.flag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ffd08a;
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.35);
+}
+
+.done {
+  font-size: 10.5px;
+  color: var(--muted-2);
+  font-style: italic;
+}
+
+.empty {
+  padding: 26px;
+  text-align: center;
+  color: var(--muted-2);
+  font-style: italic;
+}

@@ -1,0 +1,295 @@
+/*
+  Dispatch software is looked at for eight hours a day by people who need to find one row
+  out of two hundred. Everything here follows from that: dense rows, small type, tabular
+  numerals, colour used only where it carries meaning, and no decoration that costs a pixel
+  of vertical space.
+*/
+
+:root {
+  --bg: #0b0f14;
+  --panel: #10171f;
+  --panel-2: #141d27;
+  --panel-3: #18232f;
+  --line: #1e2a37;
+  --line-soft: #18222d;
+
+  --text: #d3dde8;
+  --text-strong: #edf3f9;
+  --muted: #7d8fa2;
+  --muted-2: #5d6d7e;
+
+  --accent: #58a6ff;
+  --accent-soft: #16304d;
+  --warn: #ffb020;
+  --bad: #ff6b6b;
+  --good: #34d399;
+
+  --st-tendered: #8296ab;
+  --st-dispatched: #58a6ff;
+  --st-atshipper: #ffb020;
+  --st-loaded: #a78bfa;
+  --st-intransit: #22d3ee;
+  --st-atconsignee: #fb923c;
+  --st-delivered: #34d399;
+
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Consolas", "Liberation Mono", monospace;
+  --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+
+  --row-h: 38px;
+  --radius: 3px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #22303f;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2e3f52;
+  background-clip: content-box;
+}
+
+/* ---------------------------------------------------------------- primitives */
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.dim {
+  color: var(--muted-2);
+}
+
+.eyebrow {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: #1f2c3a;
+  border-color: #2a3b4d;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.primary {
+  background: #17416f;
+  border-color: #245a94;
+  color: #dbeafe;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #1d5290;
+  border-color: #2f6dae;
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+button.ghost:hover:not(:disabled) {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+button.tiny {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+input,
+textarea,
+select {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: #0a0e13;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #2d5f92;
+}
+
+/* ------------------------------------------------------------- status colour */
+
+.st-Tendered {
+  --st: var(--st-tendered);
+}
+.st-Dispatched {
+  --st: var(--st-dispatched);
+}
+.st-AtShipper {
+  --st: var(--st-atshipper);
+}
+.st-Loaded {
+  --st: var(--st-loaded);
+}
+.st-InTransit {
+  --st: var(--st-intransit);
+}
+.st-AtConsignee {
+  --st: var(--st-atconsignee);
+}
+.st-Delivered {
+  --st: var(--st-delivered);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 7px 0 5px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--st);
+  background: color-mix(in srgb, var(--st) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--st) 28%, transparent);
+  white-space: nowrap;
+}
+
+.pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--st);
+  flex: none;
+}
+
+.code-chip {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: #1a2431;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------- panels */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.banner {
+  display: flex;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.banner.warn {
+  color: #ffd08a;
+  background: rgba(255, 176, 32, 0.08);
+  border-color: rgba(255, 176, 32, 0.3);
+}
+
+.banner.bad {
+  color: #ffb3b3;
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.32);
+}
+
+.banner.good {
+  color: #a7f3d0;
+  background: rgba(52, 211, 153, 0.07);
+  border-color: rgba(52, 211, 153, 0.26);
+}

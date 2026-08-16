@@ -1,0 +1,25 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Built against the .NET 8 targeting pack; runs on whatever major runtime is
+         installed. Without this, a machine with only the 10.x runtime refuses to start
+         a net8.0 app, and CI images move faster than this repo does. -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <!--
+    EdiX12.Core comes from the sibling repository until the NuGet package is published.
+    See docs/edi-toolkit-dependency.md. Override on the command line if it lives
+    elsewhere:  dotnet build -p:EdiX12CoreProject=C:\src\EdiX12.Core\EdiX12.Core.csproj
+  -->
+  <PropertyGroup>
+    <EdiX12CoreProject Condition="'$(EdiX12CoreProject)' == ''">$(MSBuildThisFileDirectory)..\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj</EdiX12CoreProject>
+  </PropertyGroup>
+
+</Project>

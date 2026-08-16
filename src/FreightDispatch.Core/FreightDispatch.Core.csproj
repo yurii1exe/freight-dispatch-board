@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(EdiX12CoreProject)')">
+    <ProjectReference Include="$(EdiX12CoreProject)" />
+  </ItemGroup>
+
+  <Target Name="CheckEdiX12Core" BeforeTargets="CollectPackageReferences;Restore;Build"
+          Condition="!Exists('$(EdiX12CoreProject)')">
+    <Error Text="EdiX12.Core was not found at '$(EdiX12CoreProject)'. Clone edi-x12-toolkit next to this repository, or pass -p:EdiX12CoreProject=&lt;path to EdiX12.Core.csproj&gt;. Once EdiX12.Core is on NuGet this becomes a PackageReference — see docs/edi-toolkit-dependency.md." />
+  </Target>
+
+</Project>
