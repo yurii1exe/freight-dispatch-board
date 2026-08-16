@@ -1,0 +1,3 @@
+[submodule "external/edi-x12-toolkit"]
+	path = external/edi-x12-toolkit
+	url = https://github.com/yurii1exe/edi-x12-toolkit.git

@@ -14,12 +14,22 @@
   </PropertyGroup>
 
   <!--
-    EdiX12.Core comes from the sibling repository until the NuGet package is published.
-    See docs/edi-toolkit-dependency.md. Override on the command line if it lives
-    elsewhere:  dotnet build -p:EdiX12CoreProject=C:\src\EdiX12.Core\EdiX12.Core.csproj
+    EdiX12.Core comes from source until the NuGet package is published, and it is
+    pinned as a git submodule under external/ so that a fresh clone builds without
+    anything else being checked out. See docs/edi-toolkit-dependency.md.
+
+    Resolution order:
+      1. -p:EdiX12CoreProject=<path>              an explicit override wins
+      2. external/edi-x12-toolkit/...             the submodule — the normal case
+      3. ../edi-x12-toolkit/...                   a sibling checkout, for working on
+                                                  both repositories at once
   -->
   <PropertyGroup>
-    <EdiX12CoreProject Condition="'$(EdiX12CoreProject)' == ''">$(MSBuildThisFileDirectory)..\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj</EdiX12CoreProject>
+    <EdiX12CoreSubmodule>$(MSBuildThisFileDirectory)external\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj</EdiX12CoreSubmodule>
+    <EdiX12CoreSibling>$(MSBuildThisFileDirectory)..\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj</EdiX12CoreSibling>
+    <EdiX12CoreProject Condition="'$(EdiX12CoreProject)' == '' And Exists('$(EdiX12CoreSubmodule)')">$(EdiX12CoreSubmodule)</EdiX12CoreProject>
+    <EdiX12CoreProject Condition="'$(EdiX12CoreProject)' == '' And Exists('$(EdiX12CoreSibling)')">$(EdiX12CoreSibling)</EdiX12CoreProject>
+    <EdiX12CoreProject Condition="'$(EdiX12CoreProject)' == ''">$(EdiX12CoreSubmodule)</EdiX12CoreProject>
   </PropertyGroup>
 
 </Project>

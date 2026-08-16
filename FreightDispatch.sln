@@ -7,7 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FreightDispatch.Core", "src\FreightDispatch.Core\FreightDispatch.Core.csproj", "{DF4F2115-5921-431E-AC1B-10BA24A72B9B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdiX12.Core", "..\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj", "{2AA2DA76-3189-4A8E-A4ED-1B05F061366F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdiX12.Core", "external\edi-x12-toolkit\src\EdiX12.Core\EdiX12.Core.csproj", "{2AA2DA76-3189-4A8E-A4ED-1B05F061366F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FreightDispatch.Api", "src\FreightDispatch.Api\FreightDispatch.Api.csproj", "{4490FE1C-E6CB-453B-BEF5-149A1A88358F}"
 EndProject

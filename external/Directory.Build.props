@@ -1,0 +1,12 @@
+<!--
+  Deliberately empty.
+
+  MSBuild walks up from a project directory until it finds a Directory.Build.props,
+  and stops there. Without this file, the submodule under external/ would inherit
+  the root Directory.Build.props of *this* repository — which pins TargetFramework
+  to net8.0 and would quietly collapse EdiX12.Core's netstandard2.0;net8.0
+  multi-targeting.
+
+  The submodule is a separate repository and builds with its own settings.
+-->
+<Project />
