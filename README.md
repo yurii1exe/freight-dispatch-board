@@ -517,6 +517,33 @@ invented rather than borrowed.
 This project is not affiliated with, endorsed by, or derived from the Accredited Standards
 Committee X12. "X12" is used here only to name the standard it reads.
 
+## Demo media
+
+The recording and the screenshots used above are held in `docs/`, alongside the design notes and
+the five board captures. The published video and its poster are cut from the recording; the
+published stills are captures of the running app.
+
+| Source | What it shows | Published as |
+|---|---|---|
+| `docs/board-demo.gif` | 1920×1080, 33s. A 204 pasted in, answered with a 997, walked across a four-stop run as 214 status messages, and closed with a 210 invoice | `board-demo.mp4`, `board-demo.webm`, and the poster `board-demo.webp` |
+| `docs/dispatch-board.png` | 3800×1760. Twelve loads on the board with their status, equipment, shipper, pickup, consignee, delivery, stop-count, weight, BOL and 214 columns — `997 R` against LD10042407, `210 complete` against LD10041944 — and LD10041972 open beside them in transit, its 214 on the wire with `AT7*AF*NS` highlighted | `dispatch-board.webp`, a 1600×742 band cut from it |
+| `docs/tender-204-raw.png` | 1520×1200. The *Tender a 204* dialog holding a raw tender, from the ISA header down through `B2`, `L11`, `N7`, `NTE` and the first `S5` stop loop, with the four bundled samples listed underneath | `tender-204-raw.webp` |
+| `docs/ack-997-rejected.png` | 880×1674. Load LD10042407 badged 997 REJECTED, its two envelope diagnostics — `X12-IEA02-CONTROL` at segment 26 and `X12-SE01-COUNT` at segment 24 — the 997 that went back carrying `AK5*R*4` and `AK9*R*1*1*0`, and the note that an interchange-level defect needs a TA1 | `ack-997-rejected.webp` |
+| `docs/status-214-wire.png` | 880×1358. Load LD10041903 in transit with its four 214s — XB, X3, CP and AF — and the message on the wire showing `AT7*AF*NS`, `MS1`, both `N1` party loops and the `SE*14*4018` trailer | `status-214-wire.webp` |
+| `docs/invoice-210-delivered.png` | 880×1608. Delivered load LD10041944 with its six 214s from XB through D1, an invoice of linehaul and a 22 percent fuel surcharge netting 2,554.38 on net-30 terms, and the 210 on the wire | `invoice-210-delivered.webp` |
+| `docs/board.png` | 1920×1080. One load open and in transit: the Accepted 997, its two stops with windows, contacts and references, and the 214 out console with its `AT7` highlighted | — embedded above, not published |
+| `docs/diagnostics.png` | 1920×1080. A tender badged 997 REJECTED, its two envelope diagnostics, and the outbound 997 with `AK5*R*4` highlighted | — embedded above, not published |
+
+The published files live in the site repository under
+`TheSite/ClientApp/src/assets/portfolio/freight-dispatch-board/`, with the card thumbnail
+`freight-dispatch-board.webp` one directory above. Provenance runs two ways and this repository
+holds the source for both. The video and its poster are produced from `docs/board-demo.gif` with
+ffmpeg — mp4 and webm, a webp poster beside them. The stills are Playwright captures of the
+running app, converted to webp with ffmpeg. Every derivative is regenerated rather than edited.
+
+They feed the `freight-dispatch-board` entry on disit.tech/work, whose case study is at
+`/services/software-development/freight-dispatch-board`.
+
 ## License
 
 MIT.
